@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IHM Supervision Industrielle</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">IHM</div>
+      <div>
+        <h1>IHM Devices</h1>
+        <p>Supervision industrielle</p>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-tab="dashboard"><span class="nav-icon nav-icon--dash"></span>Vue générale</button>
+      <button class="nav-btn" data-tab="moteur"><span class="nav-icon nav-icon--motor"></span>Moteur</button>
+      <button class="nav-btn" data-tab="sensors"><span class="nav-icon nav-icon--sensor"></span>Capteurs</button>
+      <button class="nav-btn" data-tab="batteries"><span class="nav-icon nav-icon--bat"></span>Batteries</button>
+      <button class="nav-btn" data-tab="systeme"><span class="nav-icon nav-icon--sys"></span>Système</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="system-state">
+        <span class="state-dot online"></span>
+        <span id="sysStateLabel">Système opérationnel</span>
+      </div>
+      <div class="sidebar-meta">
+        <span>Backend : <strong id="sidebarBackendStatus">–</strong></span>
+        <span>IHM v1.0</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h2 id="pageTitle">Vue générale</h2>
+        <p id="pageSubtitle">Supervision temps réel des équipements</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="ghost-btn" id="refreshBtn">↺ Actualiser</button>
+        <button class="ghost-btn" id="pauseBtn">⏸ Pause</button>
+        <button class="danger-btn" id="globalShutdownBtn">⏻ Shutdown</button>
+      </div>
+    </header>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="tab-content active">
+      <div class="grid">
+
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Statut global du système</h3><p>Vue synthétique — état de communication et mode opérationnel</p></div>
+            <div class="live-badge"><span class="pulse"></span>Temps réel</div>
+          </div>
+          <div class="kpis">
+            <div class="kpi">
+              <span class="kpi-label">Statut serveur</span>
+              <span class="kpi-value success-text" id="dashServeur">ONLINE</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-label">Communication</span>
+              <span class="kpi-value success-text" id="dashComm">CONNECTED</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-label">Mode</span>
+              <span class="kpi-value" id="dashMode">AUTOMATIQUE</span>
+            </div>
+            <div class="kpi">
+              <span class="kpi-label">Alarmes critiques</span>
+              <span class="kpi-value danger-text" id="kpiCritical">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card span-4">
+          <div class="card-header">
+            <div><h3>Moteur</h3><p>Résumé état moteur principal</p></div>
+            <span class="status-pill ok" id="dashMotorBadge">RUN</span>
+          </div>
+          <div class="dash-summary">
+            <div class="dash-row"><span>Statut</span><strong id="dashMotorStatus">RUN</strong></div>
+            <div class="dash-row"><span>RPM actuel</span><strong id="dashRpmActual">–</strong></div>
+            <div class="dash-row"><span>RPM consigne</span><strong id="dashRpmCmd">–</strong></div>
+            <div class="dash-row"><span>Température</span><strong id="dashMotorTemp">–</strong></div>
+          </div>
+        </div>
+
+        <div class="card span-4">
+          <div class="card-header">
+            <div><h3>Capteurs</h3><p>État rapide des capteurs terrain</p></div>
+          </div>
+          <div class="dash-summary">
+            <div class="dash-row">
+              <span>Eau</span>
+              <span class="dash-led-row"><span class="led-sm" id="dashLedEau" data-state="unknown"></span><strong id="dashEtatEau">–</strong></span>
+            </div>
+            <div class="dash-row">
+              <span>Pression</span>
+              <span class="dash-led-row"><span class="led-sm" id="dashLedPression" data-state="unknown"></span><strong id="dashEtatPression">–</strong></span>
+            </div>
+            <div class="dash-row">
+              <span>Température</span>
+              <span class="dash-led-row"><span class="led-sm" id="dashLedTemp" data-state="unknown"></span><strong id="dashEtatTemp">–</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card span-4">
+          <div class="card-header">
+            <div><h3>Batterie</h3><p>Niveau et état du pack batterie</p></div>
+            <span class="status-pill warn" id="dashBatBadge">MONITOR</span>
+          </div>
+          <div class="dash-summary">
+            <div class="dash-row"><span>Niveau</span><strong id="dashBatLevel">78%</strong></div>
+            <div class="dash-row"><span>Température</span><strong id="dashBatTemp">31°C</strong></div>
+            <div class="dash-row"><span>État</span><strong id="dashBatEtat">Charge</strong></div>
+            <div class="dash-row"><span>Alarme</span><strong id="dashBatAlarme" class="success-text">Aucune</strong></div>
+          </div>
+        </div>
+
+        <div class="card span-7">
+          <div class="card-header">
+            <div><h3>Performances moteur</h3><p>Évolution RPM / Température — simulation temps réel</p></div>
+          </div>
+          <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+        </div>
+
+        <div class="card span-5">
+          <div class="card-header">
+            <div><h3>Journal opérateur</h3><p>Événements récents</p></div>
+          </div>
+          <div class="log-list" id="logList"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- MOTEUR -->
+    <section id="moteur" class="tab-content">
+      <div class="grid">
+
+        <div class="card span-12 card-motor-banner">
+          <div class="motor-banner-content">
+            <div class="motor-banner-title">
+              <span class="motor-banner-dot" id="motorBannerDot"></span>
+              <div><h3>Moteur principal — SMO</h3><p>Supervision et commande du moteur de propulsion</p></div>
+            </div>
+            <span class="status-pill ok" id="motorStatusBadge">RUN</span>
+          </div>
+        </div>
+
+        <div class="card span-5">
+          <div class="card-header">
+            <div><h3>Commande moteur</h3><p>Saisie de la consigne RPM</p></div>
+          </div>
+          <div class="motor-command-box">
+            <label class="motor-command-label" for="rpmInput">Consigne RPM (0 – 3000 tr/min)</label>
+            <div class="motor-input-row">
+              <input id="rpmInput" type="number" min="0" max="3000" step="10" value="1500" placeholder="Entrer la vitesse" />
+              <button id="sendRpmBtn" class="btn-primary">Entrée</button>
+            </div>
+            <div class="motor-command-feedback" id="motorCommandFeedback">Aucune commande envoyée.</div>
+          </div>
+          <div class="alarm-section">
+            <div class="alarm-section-title">Alarmes moteur</div>
+            <div class="alarm-list">
+              <div class="alarm-row"><span class="alarm-led" id="alarmSurchauffe" data-state="ok"></span><span>Surchauffe</span><strong class="alarm-val success-text">OK</strong></div>
+              <div class="alarm-row"><span class="alarm-led" id="alarmSurvitesse" data-state="ok"></span><span>Sur-vitesse</span><strong class="alarm-val success-text">OK</strong></div>
+              <div class="alarm-row"><span class="alarm-led" id="alarmBlocage" data-state="ok"></span><span>Blocage moteur</span><strong class="alarm-val success-text">OK</strong></div>
+              <div class="alarm-row"><span class="alarm-led" id="alarmComm" data-state="ok"></span><span>Erreur communication</span><strong class="alarm-val success-text">OK</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card span-7">
+          <div class="card-header">
+            <div><h3>Informations moteur</h3><p>État courant en temps réel</p></div>
+          </div>
+          <div class="motor-info-grid">
+            <div class="motor-info-box"><span class="motor-info-label">Statut</span><strong id="motorStatus">RUN</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">RPM actuel</span><strong id="motorRpmActual">1450 tr/min</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">RPM consigné</span><strong id="motorRpmCmd">1500 tr/min</strong></div>
+            <div class="motor-info-box highlight-temp"><span class="motor-info-label">Température</span><strong id="motorTemperature">39 °C</strong></div>
+          </div>
+          <div class="rpm-gauge-wrap">
+            <div class="rpm-gauge-header">
+              <span class="motor-info-label">Charge RPM</span>
+              <span id="rpmGaugePct">48%</span>
+            </div>
+            <div class="rpm-gauge-track">
+              <div class="rpm-gauge-fill" id="rpmGaugeFill" style="width:48%"></div>
+            </div>
+            <div class="rpm-gauge-scale">
+              <span>0</span><span>750</span><span>1500</span><span>2250</span><span>3000</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Courbe moteur</h3><p>Évolution RPM / Température — mise à jour automatique</p></div>
+          </div>
+          <div class="chart-wrap"><canvas id="motorChart"></canvas></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- CAPTEURS -->
+    <section id="sensors" class="tab-content">
+      <div class="grid">
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Capteurs</h3><p>Retour d'état et valeurs</p></div>
+          </div>
+          <table class="table sensor-table">
+            <thead>
+              <tr><th>Capteur</th><th class="col-led">LED</th><th>État</th><th>Retour</th><th>Interprétation</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="sensor-name">Eau</td>
+                <td class="col-led"><span class="led" id="ledEau" data-state="unknown"></span></td>
+                <td id="etatEau">–</td><td id="retourEau">–</td><td id="interpEau">–</td>
+              </tr>
+              <tr>
+                <td class="sensor-name">Pression</td>
+                <td class="col-led"><span class="led" id="ledPression" data-state="unknown"></span></td>
+                <td id="etatPression">–</td><td id="retourPression">–</td><td id="interpPression">–</td>
+              </tr>
+              <tr>
+                <td class="sensor-name">Température</td>
+                <td class="col-led"><span class="led" id="ledTemperature" data-state="unknown"></span></td>
+                <td id="etatTemperature">–</td><td id="retourTemperature">–</td><td id="interpTemperature">–</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- BATTERIES -->
+    <section id="batteries" class="tab-content">
+      <div class="grid">
+
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Pack batterie</h3><p>Surveillance énergétique et thermique</p></div>
+            <span class="status-pill warn" id="batStatusBadge">MONITOR</span>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><span class="kpi-label">Niveau batterie</span><span class="kpi-value" id="batNiveau">78<small>%</small></span></div>
+            <div class="kpi"><span class="kpi-label">Température</span><span class="kpi-value warning-text" id="batTemp">31<small>°C</small></span></div>
+            <div class="kpi"><span class="kpi-label">État</span><span class="kpi-value success-text" id="batEtat">Charge</span></div>
+            <div class="kpi"><span class="kpi-label">Alarme active</span><span class="kpi-value success-text" id="batAlarme">Aucune</span></div>
+          </div>
+        </div>
+
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>Niveau batterie</h3><p>Pourcentage de charge</p></div>
+          </div>
+          <div class="bat-level-display">
+            <div class="bat-pct-text" id="batPctText">78%</div>
+            <div class="bat-bar-track">
+              <div class="bat-bar-fill" id="batBarFill" style="width:78%"></div>
+            </div>
+            <div class="bat-bar-scale">
+              <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>Tensions cellules</h3><p>Valeurs min / max par cellule</p></div>
+          </div>
+          <div class="motor-info-grid">
+            <div class="motor-info-box"><span class="motor-info-label">U min cellule</span><strong id="batUmin">3.62 V</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">U max cellule</span><strong id="batUmax">3.79 V</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">T min pack</span><strong id="batTmin">24 °C</strong></div>
+            <div class="motor-info-box highlight-temp"><span class="motor-info-label">T max pack</span><strong id="batTmax">31 °C</strong></div>
+          </div>
+        </div>
+
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Alarmes batterie</h3><p>Surveillance des seuils critiques</p></div>
+          </div>
+          <div class="alarm-grid">
+            <div class="alarm-row"><span class="alarm-led" id="alarmBatFaible" data-state="ok"></span><span>Batterie faible</span><strong class="alarm-val success-text">OK</strong></div>
+            <div class="alarm-row"><span class="alarm-led" id="alarmBatSurchauffe" data-state="ok"></span><span>Surchauffe pack</span><strong class="alarm-val success-text">OK</strong></div>
+            <div class="alarm-row"><span class="alarm-led" id="alarmBatDeconnect" data-state="ok"></span><span>Batterie déconnectée</span><strong class="alarm-val success-text">OK</strong></div>
+            <div class="alarm-row"><span class="alarm-led" id="alarmBatEcart" data-state="warn"></span><span>Écart de température</span><strong class="alarm-val warning-text">SURVEILLER</strong></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SYSTÈME -->
+    <section id="systeme" class="tab-content">
+      <div class="grid">
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>État système</h3><p>Informations générales et diagnostics</p></div>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><span class="kpi-label">Version IHM</span><span class="kpi-value" style="font-size:18px">v1.0</span></div>
+            <div class="kpi"><span class="kpi-label">Backend</span><span class="kpi-value success-text" style="font-size:18px" id="systBackend">–</span></div>
+            <div class="kpi"><span class="kpi-label">Uptime</span><span class="kpi-value" style="font-size:18px" id="systUptime">00:00:00</span></div>
+            <div class="kpi"><span class="kpi-label">Mode</span><span class="kpi-value" style="font-size:18px">Supervision</span></div>
+          </div>
+        </div>
+        <div class="card span-6">
+          <div class="card-header"><div><h3>Points d'accès API</h3><p>Endpoints backend configurés</p></div></div>
+          <table class="table">
+            <thead><tr><th>Méthode</th><th>Endpoint</th><th>Rôle</th></tr></thead>
+            <tbody>
+              <tr><td><span class="method-pill get">GET</span></td><td>/api/status</td><td>Statut serveur</td></tr>
+              <tr><td><span class="method-pill get">GET</span></td><td>/api/motor</td><td>État moteur</td></tr>
+              <tr><td><span class="method-pill get">GET</span></td><td>/api/sensors</td><td>Capteurs</td></tr>
+              <tr><td><span class="method-pill get">GET</span></td><td>/api/battery</td><td>Batterie</td></tr>
+              <tr><td><span class="method-pill post">POST</span></td><td>/api/motor/rpm_cmd</td><td>Consigne RPM</td></tr>
+              <tr><td><span class="method-pill post">POST</span></td><td>/api/system/mode</td><td>Mode système</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card span-6">
+          <div class="card-header"><div><h3>Journal système</h3><p>Événements récents</p></div></div>
+          <div class="log-list" id="systLogList"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="modal hidden" id="deviceModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div><h3 id="modalTitle">Détail équipement</h3><p id="modalSubtitle">Données temps réel</p></div>
+      <button class="close-btn" id="closeModalBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-stats">
+        <div class="modal-stat"><span>Statut</span><strong id="modalStatus">OK</strong></div>
+        <div class="modal-stat"><span>Valeur actuelle</span><strong id="modalCurrent">–</strong></div>
+        <div class="modal-stat"><span>Seuil max</span><strong id="modalThreshold">–</strong></div>
+      </div>
+      <div class="chart-wrap modal-chart"><canvas id="deviceChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
