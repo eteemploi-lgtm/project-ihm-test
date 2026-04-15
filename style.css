@@ -1081,6 +1081,12 @@ html, body {
   background-position: center;
   opacity: 0.55;
 }
+.nav-btn.active .nav-icon { opacity: 0.9; }
+.nav-icon--dash   { background-color: var(--blue);   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='6' height='6' rx='1'/%3E%3Crect x='9' y='1' width='6' height='6' rx='1'/%3E%3Crect x='1' y='9' width='6' height='6' rx='1'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1'/%3E%3C/svg%3E") no-repeat center/contain; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='1' width='6' height='6' rx='1'/%3E%3Crect x='9' y='1' width='6' height='6' rx='1'/%3E%3Crect x='1' y='9' width='6' height='6' rx='1'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1'/%3E%3C/svg%3E") no-repeat center/contain; background-color: currentColor; }
+.nav-icon--motor  { background-color: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='black' stroke-width='2'/%3E%3Ccircle cx='8' cy='8' r='2'/%3E%3C/svg%3E") no-repeat center/contain; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='black' stroke-width='2'/%3E%3Ccircle cx='8' cy='8' r='2'/%3E%3C/svg%3E") no-repeat center/contain; }
+.nav-icon--sensor { background-color: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat center/contain; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='black' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat center/contain; }
+.nav-icon--bat    { background-color: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='4' width='12' height='8' rx='1.5'/%3E%3Crect x='13' y='6' width='2' height='4' rx='1'/%3E%3Crect x='3' y='6' width='4' height='4' rx='0.5' fill='white'/%3E%3C/svg%3E") no-repeat center/contain; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='4' width='12' height='8' rx='1.5'/%3E%3Crect x='13' y='6' width='2' height='4' rx='1'/%3E%3Crect x='3' y='6' width='4' height='4' rx='0.5' fill='white'/%3E%3C/svg%3E") no-repeat center/contain; }
+.nav-icon--sys    { background-color: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1l1.5 2.5H13l-2 2.5 1 3L8 7.5 4 9l1-3L3 3.5h3.5z'/%3E%3C/svg%3E") no-repeat center/contain; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1l1.5 2.5H13l-2 2.5 1 3L8 7.5 4 9l1-3L3 3.5h3.5z'/%3E%3C/svg%3E") no-repeat center/contain; }
 
 /* ════════════════════════════════════════
    DASHBOARD — résumés (moteur / capteurs / batterie)
@@ -1645,7 +1651,12 @@ html, body {
    GOUVERNE
 ════════════════════════════════════════ */
 
-
+/* Icône nav gouverne */
+.nav-icon--gouv {
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2 L8 14 M4 5 L8 2 L12 5 M4 11 L8 14 L12 11'/%3E%3C/svg%3E") no-repeat center/contain;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2 L8 14 M4 5 L8 2 L12 5 M4 11 L8 14 L12 11'/%3E%3C/svg%3E") no-repeat center/contain;
+}
 
 /* Barre de position gouverne (couleur violette) */
 .rpm-gauge-fill.gouv-fill {
@@ -1729,4 +1740,187 @@ html, body {
 .chart-toggle:not(.active) {
   opacity: 0.45;
   text-decoration: line-through;
+}
+
+/* ════════════════════════════════════════
+   CONNEXION — STYLE IMAGE 2
+════════════════════════════════════════ */
+
+/* Titre avec barre d'accent bleue */
+.conn-card-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.conn-accent-bar {
+  width: 4px;
+  height: 22px;
+  background: var(--blue);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.conn-card-title h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Ligne IP + Port */
+.conn-fields-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: flex-end;
+}
+
+.conn-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conn-field-ip   { flex: 1; }
+.conn-field-port { flex: 0 0 180px; }
+
+.conn-field-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.conn-field-group input {
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--card-light);
+  color: var(--text);
+  font-size: 16px;
+  font-family: "Consolas", "Courier New", monospace;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+
+.conn-field-group input:focus {
+  border-color: rgba(42,140,255,0.6);
+  box-shadow: 0 0 0 3px rgba(42,140,255,0.10);
+}
+
+/* Boutons */
+.conn-btn-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.conn-btn-connect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 28px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: #1a5fd4;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.conn-btn-connect:hover:not(:disabled) {
+  background: #2070e8;
+}
+
+.conn-btn-connect:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.conn-btn-connect:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.conn-btn-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.85);
+  flex-shrink: 0;
+}
+
+.conn-btn-disconnect {
+  padding: 13px 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.conn-btn-disconnect:hover:not(:disabled) {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: rgba(240,78,104,0.35);
+}
+
+.conn-btn-disconnect:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Barre de statut */
+.conn-status-bar {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--card-light);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--muted);
+  font-family: "Consolas", "Courier New", monospace;
+  transition: all 0.2s;
+}
+
+.conn-status-bar.success {
+  color: var(--green);
+  border-color: rgba(24,217,122,0.25);
+  background: var(--green-bg);
+}
+
+.conn-status-bar.error {
+  color: var(--red);
+  border-color: rgba(240,78,104,0.25);
+  background: var(--red-bg);
+}
+
+/* Barre d'erreur */
+.conn-error-bar {
+  margin-top: 8px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--red-bg);
+  border: 1px solid rgba(240,78,104,0.3);
+  font-size: 13px;
+  color: var(--red);
+}
+
+.conn-error-bar.hidden { display: none; }
+
+@media (max-width: 640px) {
+  .conn-fields-row { flex-direction: column; }
+  .conn-field-port { flex: 1; }
+  .conn-btn-row    { flex-direction: column; }
 }
