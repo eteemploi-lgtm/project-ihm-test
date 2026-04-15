@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Outil de Tête Acoustique</title>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ══ GRAND HEADER TITRE ══ -->
+<div class="app-header">
+  <div class="header-logo">IHM</div>
+  <div class="header-text">
+    <span class="header-title">Outil de Tête Acoustique</span>
+    <span class="header-subtitle">Interface de pilotage et de supervision des échanges</span>
+  </div>
+  <div class="header-right">
+    <div class="chip disconnected" id="globalConnectionChip">
+      <span class="chip-dot"></span>Déconnecté
+    </div>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- ══ NAV ══ -->
+  <nav class="nav">
+    <div class="nav-section-label">Navigation</div>
+    <ul class="nav-menu">
+      <li class="nav-item active" data-view="overview"><span class="nav-icon">⬡</span>Vue générale</li>
+      <li class="nav-item" data-view="test"><span class="nav-icon">◈</span>Trame Test</li>
+      <li class="nav-item" data-view="sequence"><span class="nav-icon">◇</span>Trame Séquentielle</li>
+      <li class="nav-item" data-view="resume"><span class="nav-icon">▣</span>Résumé</li>
+    </ul>
+    <div class="nav-bottom">
+      <div class="nav-conn-status" id="navConnStatus">
+        <span class="dot disconnected"></span>
+        <span id="navConnLabel">Déconnecté</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══ WORKSPACE ══ -->
+  <div class="workspace">
+
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title" id="pageTitle">Vue générale</h1>
+        <p class="page-sub" id="pageSub">Connexion WebSocket · Supervision en temps réel</p>
+      </div>
+    </header>
+
+    <!-- ══ VIEW: OVERVIEW ══ -->
+    <div class="view active" id="view-overview">
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-icon blue">◈</div>
+          <div class="stat-body">
+            <span class="stat-label">Trame Test</span>
+            <span class="stat-val" id="statTestSent">0</span>
+            <span class="stat-unit">envoyées</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon teal">◇</div>
+          <div class="stat-body">
+            <span class="stat-label">Trame Séquentielle</span>
+            <span class="stat-val" id="statSeqSent">0</span>
+            <span class="stat-unit">envoyées</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">▣</div>
+          <div class="stat-body">
+            <span class="stat-label">Réponses reçues</span>
+            <span class="stat-val" id="statRecv">0</span>
+            <span class="stat-unit">total</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon orange">◉</div>
+          <div class="stat-body">
+            <span class="stat-label">Dernière trame</span>
+            <span class="stat-val" id="statLastTime">--:--</span>
+            <span class="stat-unit">heure</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="overview-main">
+        <div class="overview-left">
+
+          <!-- Connexion -->
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-accent blue"></div>
+              <h2>Connexion au serveur</h2>
+            </div>
+            <div class="card-body">
+              <div class="conn-row">
+                <div class="field grow">
+                  <label for="ipAddress">Adresse IP</label>
+                  <input type="text" id="ipAddress" value="127.0.0.1" placeholder="192.168.1.10"/>
+                </div>
+                <div class="field w140">
+                  <label for="PortComm">Port</label>
+                  <input type="number" id="PortComm" value="5500"/>
+                </div>
+              </div>
+              <div class="conn-btns">
+                <button type="button" id="connectBtn" class="btn btn-primary btn-xl">
+                  <span class="btn-icon">⬡</span> Connecter
+                </button>
+                <button type="button" id="disconnectBtn" class="btn btn-ghost-danger btn-xl">
+                  Déconnecter
+                </button>
+              </div>
+              <div id="connectionStatus" class="status-bar">Déconnecté</div>
+              <div id="errorMessage" class="status-bar error hidden"></div>
+            </div>
+          </section>
+
+          <!-- Quick nav -->
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-accent teal"></div>
+              <h2>Accès rapide</h2>
+            </div>
+            <div class="card-body">
+              <div class="quick-grid">
+                <button class="quick-btn" data-nav="test">
+                  <span class="qb-icon blue">◈</span>
+                  <div class="qb-text">
+                    <span class="qb-label">Trame Test</span>
+                    <span class="qb-hint">1020 octets</span>
+                  </div>
+                  <span class="qb-arrow">→</span>
+                </button>
+                <button class="quick-btn" data-nav="sequence">
+                  <span class="qb-icon teal">◇</span>
+                  <div class="qb-text">
+                    <span class="qb-label">Trame Séquentielle</span>
+                    <span class="qb-hint">1020 octets · 9 paramètres</span>
+                  </div>
+                  <span class="qb-arrow">→</span>
+                </button>
+                <button class="quick-btn" data-nav="resume">
+                  <span class="qb-icon green">▣</span>
+                  <div class="qb-text">
+                    <span class="qb-label">Résumé</span>
+                    <span class="qb-hint">Réponses serveur</span>
+                  </div>
+                  <span class="qb-arrow">→</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <div class="overview-right">
+          <section class="card card-log-full">
+            <div class="card-head">
+              <div class="card-head-accent orange"></div>
+              <h2>Logs système</h2>
+              <div class="head-actions">
+                <button class="btn btn-xs" id="copyLogsBtn">Copier</button>
+                <button class="btn btn-xs" id="clearLogsBtn">Effacer</button>
+              </div>
+            </div>
+            <textarea class="log-viewer" id="logViewer" readonly spellcheck="false"></textarea>
+            <div class="log-foot" id="logMeta">--:--:-- | -- octets | ----</div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: TRAME TEST ══ -->
+    <div class="view" id="view-test">
+      <div class="two-col-layout">
+        <div class="col-main">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-accent blue"></div>
+              <h2>Envoi — Commande Test</h2>
+              <span class="badge">1020 octets</span>
+            </div>
+            <div class="card-body">
+              <div class="fields-grid g2">
+                <div class="field">
+                  <label for="NumMsgTest">N° message <span class="muted">(lecture seule)</span></label>
+                  <input type="number" id="NumMsgTest" value="7" readonly/>
+                </div>
+                <div class="field">
+                  <label for="ident">Ident message <span class="muted">(4 car. max)</span></label>
+                  <input type="text" id="ident" maxlength="4" value="AZER"/>
+                  <small id="identLength" class="hint">4 / 4 caractères</small>
+                </div>
+              </div>
+              <div class="actions">
+                <button type="button" id="testBtn" class="btn btn-primary btn-xl">
+                  <span class="btn-icon">◈</span> Send CMD Test
+                </button>
+              </div>
+              <div id="sendStatus" class="status-bar hidden"></div>
+            </div>
+          </section>
+
+          <!-- Détail trame Test envoyée -->
+          <section class="card" id="trameTestDetail" style="display:none">
+            <div class="card-head">
+              <div class="card-head-accent blue"></div>
+              <h2>Détail trame envoyée — Test</h2>
+              <span class="badge" id="trameTestSize">0 octets</span>
+              <span class="badge" id="trameTestChecksum" style="margin-left:6px;background:rgba(45,212,191,0.14);color:#2dd4bf;border-color:rgba(45,212,191,0.25)">CRC: --</span>
+            </div>
+            <div class="card-body">
+              <div class="trame-info-row">
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Ident</span>
+                  <span class="trame-info-val" id="ti_ident">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">N° Message</span>
+                  <span class="trame-info-val" id="ti_numMsg">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Timestamp</span>
+                  <span class="trame-info-val" id="ti_timestamp">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Checksum</span>
+                  <span class="trame-info-val" id="ti_checksum">—</span>
+                </div>
+              </div>
+              <div class="trame-hex-block">
+                <div class="trame-hex-label">Premiers 32 octets (hex)</div>
+                <div class="trame-hex" id="ti_hex32">—</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-accent green"></div>
+              <h2>Réponse — Test</h2>
+            </div>
+            <div class="card-body">
+              <div class="fields-grid g3">
+                <div class="field"><label for="NumMsg">N° message</label><input type="text" id="NumMsg" readonly/><small id="NumMsgInfo" class="hint"></small></div>
+                <div class="field"><label for="identResponse">Ident</label><input type="text" id="identResponse" readonly/><small id="identResponseInfo" class="hint"></small></div>
+                <div class="field"><label for="resultat">Résultat</label><input type="text" id="resultat" readonly/><small id="resultatInfo" class="hint"></small></div>
+                <div class="field"><label for="detail">Détail</label><input type="text" id="detail" readonly/><small id="detailInfo" class="hint"></small></div>
+                <div class="field"><label for="NumSeq">Séquence</label><input type="text" id="NumSeq" readonly/><small id="NumSeqInfo" class="hint"></small></div>
+                <div class="field"><label for="memssd">Mémoire / SSD</label><input type="text" id="memssd" readonly/><small id="memssdInfo" class="hint"></small></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col-log">
+          <section class="card card-log">
+            <div class="card-head">
+              <div class="card-head-accent orange"></div>
+              <h2>Logs — Test</h2>
+              <div class="head-actions">
+                <button class="btn btn-xs" id="copyLogsBtn_t">Copier</button>
+                <button class="btn btn-xs" id="clearLogsBtn_t">Effacer</button>
+              </div>
+            </div>
+            <textarea class="log-viewer" id="logViewer_t" readonly spellcheck="false"></textarea>
+            <div class="log-foot" id="logMeta_t">--:--:-- | -- octets | ----</div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: TRAME SÉQUENCE ══ -->
+    <div class="view" id="view-sequence">
+      <div class="two-col-layout">
+        <div class="col-main">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-accent teal"></div>
+              <h2>Envoi — Commande Séquentielle</h2>
+              <span class="badge teal">1020 octets</span>
+            </div>
+            <div class="card-body">
+              <div class="fields-grid g2">
+                <div class="field"><label for="NumeroMsg">N° message <span class="muted">(4 bytes)</span></label><input type="number" id="NumeroMsg" value="3652"/></div>
+                <div class="field"><label for="identification">Ident <span class="muted">(4 car. max)</span></label><input type="text" id="identification" maxlength="4" value="ABCD"/><small id="identificationLength" class="hint">4 / 4 caractères</small></div>
+              </div>
+              <div class="section-sep">Paramètres de navigation</div>
+              <div class="fields-grid g4">
+                <div class="field"><label for="heure">Heure système</label><input type="text" id="heure" readonly/><small class="hint">Auto</small></div>
+                <div class="field"><label for="numeroSequence">N° séquence</label><input type="number" id="numeroSequence" value="0"/></div>
+                <div class="field"><label for="Vitesse">Vitesse</label><input type="number" id="Vitesse" value="0" step="0.01"/></div>
+                <div class="field"><label for="Cap">Cap</label><input type="number" id="Cap" value="0" step="0.01"/></div>
+                <div class="field"><label for="Bande">Bande</label><input type="number" id="Bande" value="0" step="0.01"/></div>
+                <div class="field"><label for="Assiette">Assiette</label><input type="number" id="Assiette" value="0" step="0.01"/></div>
+                <div class="field"><label for="abscisse">Abscisse X</label><input type="number" id="abscisse" value="0" step="0.01"/></div>
+                <div class="field"><label for="ordonnee">Ordonnée Y</label><input type="number" id="ordonnee" value="0" step="0.01"/></div>
+                <div class="field"><label for="z">Z</label><input type="number" id="z" value="0" step="0.01"/></div>
+              </div>
+              <div class="actions">
+                <button type="button" id="sendBtn" class="btn btn-teal btn-xl">
+                  <span class="btn-icon">◇</span> Send CMD Séquence
+                </button>
+              </div>
+              <div id="SequenceSendStatus" class="status-bar hidden"></div>
+            </div>
+          </section>
+
+          <!-- Détail trame Séquentielle envoyée -->
+          <section class="card" id="trameSeqDetail" style="display:none">
+            <div class="card-head">
+              <div class="card-head-accent teal"></div>
+              <h2>Détail trame envoyée — Séquentielle</h2>
+              <span class="badge teal" id="trameSeqSize">0 octets</span>
+              <span class="badge" id="trameSeqChecksum" style="margin-left:6px;background:rgba(45,212,191,0.14);color:#2dd4bf;border-color:rgba(45,212,191,0.25)">CRC: --</span>
+            </div>
+            <div class="card-body">
+              <div class="trame-info-row">
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Ident</span>
+                  <span class="trame-info-val" id="ts_ident">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">N° Séquence</span>
+                  <span class="trame-info-val" id="ts_seq">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Heure (s)</span>
+                  <span class="trame-info-val" id="ts_heure">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Cap</span>
+                  <span class="trame-info-val" id="ts_cap">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Assiette</span>
+                  <span class="trame-info-val" id="ts_assiette">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Bande</span>
+                  <span class="trame-info-val" id="ts_bande">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">X</span>
+                  <span class="trame-info-val" id="ts_x">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Y</span>
+                  <span class="trame-info-val" id="ts_y">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Z</span>
+                  <span class="trame-info-val" id="ts_z">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Vitesse</span>
+                  <span class="trame-info-val" id="ts_vitesse">—</span>
+                </div>
+                <div class="trame-info-item">
+                  <span class="trame-info-label">Checksum</span>
+                  <span class="trame-info-val" id="ts_checksum">—</span>
+                </div>
+              </div>
+              <div class="trame-hex-block">
+                <div class="trame-hex-label">Premiers 48 octets (hex)</div>
+                <div class="trame-hex" id="ts_hex48">—</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-accent green"></div>
+              <h2>Réponse — Séquentielle</h2>
+            </div>
+            <div class="card-body">
+              <div class="fields-grid g2">
+                <div class="field"><label for="NumMsgSeq">N° message</label><input type="text" id="NumMsgSeq" readonly/><small id="NumMsgSeqInfo" class="hint"></small></div>
+                <div class="field"><label for="identResponseSeq">Ident</label><input type="text" id="identResponseSeq" readonly/><small id="identResponseSeqInfo" class="hint"></small></div>
+                <div class="field"><label for="NumSeqb">N° séquence</label><input type="text" id="NumSeqb" readonly/><small id="NumSeqbInfo" class="hint"></small></div>
+                <div class="field"><label for="memssdSeq">Détail</label><input type="text" id="memssdSeq" readonly/><small id="memssdSeqInfo" class="hint"></small></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col-log">
+          <section class="card card-log">
+            <div class="card-head">
+              <div class="card-head-accent orange"></div>
+              <h2>Logs — Séquence</h2>
+              <div class="head-actions">
+                <button class="btn btn-xs" id="copyLogsBtn2">Copier</button>
+                <button class="btn btn-xs" id="clearLogsBtn2">Effacer</button>
+              </div>
+            </div>
+            <textarea class="log-viewer" id="logViewer2" readonly spellcheck="false"></textarea>
+            <div class="log-foot" id="logMeta2">--:--:-- | -- octets | ----</div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: RÉSUMÉ ══ -->
+    <div class="view" id="view-resume">
+      <div class="resume-grid">
+        <section class="card">
+          <div class="card-head"><div class="card-head-accent blue"></div><h2>Dernière réponse — Test</h2></div>
+          <div class="card-body">
+            <table class="data-table"><tbody>
+              <tr><td class="dt-key">N° Message</td><td class="dt-val" id="r_NumMsg">—</td></tr>
+              <tr><td class="dt-key">Ident</td><td class="dt-val" id="r_identResponse">—</td></tr>
+              <tr><td class="dt-key">Résultat</td><td class="dt-val" id="r_resultat">—</td></tr>
+              <tr><td class="dt-key">Détail</td><td class="dt-val" id="r_detail">—</td></tr>
+              <tr><td class="dt-key">Séquence</td><td class="dt-val" id="r_NumSeq">—</td></tr>
+              <tr><td class="dt-key">Mémoire / SSD</td><td class="dt-val" id="r_memssd">—</td></tr>
+            </tbody></table>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><div class="card-head-accent teal"></div><h2>Dernière réponse — Séquentielle</h2></div>
+          <div class="card-body">
+            <table class="data-table"><tbody>
+              <tr><td class="dt-key">N° Message</td><td class="dt-val" id="r_NumMsgSeq">—</td></tr>
+              <tr><td class="dt-key">Ident</td><td class="dt-val" id="r_identResponseSeq">—</td></tr>
+              <tr><td class="dt-key">N° Séquence</td><td class="dt-val" id="r_NumSeqb">—</td></tr>
+              <tr><td class="dt-key">Détail</td><td class="dt-val" id="r_memssdSeq">—</td></tr>
+            </tbody></table>
+          </div>
+        </section>
+        <section class="card span2">
+          <div class="card-head"><div class="card-head-accent orange"></div><h2>Activité récente</h2></div>
+          <div class="card-body">
+            <div class="activity-list" id="activityList">
+              <div class="activity-empty">Aucune activité pour le moment</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+  </div><!-- /workspace -->
+</div><!-- /shell -->
+
+<script src="script.js"></script>
+<script src="nav.js"></script>
+</body>
+</html>
