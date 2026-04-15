@@ -31,9 +31,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const wsPortInput   = $("wsPort");
   const btnConnect    = $("btnConnect");
   const btnDisconnect = $("btnDisconnect");
-  const wsBadge       = $("wsBadge");
-  const wsDot         = $("wsDot");
-  const wsLabel       = $("wsLabel");
 
   // Dashboard
   const dashMotorBadge  = $("dashMotorBadge");
@@ -407,73 +404,111 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   /* ════════════════════════════════
-     WEBSOCKET
+     WEBSOCKET — logique IHM acoustique
   ════════════════════════════════ */
-  let ws = null, wsPingInterval = null, wsPingStart = 0;
+  let ws          = null;
+  let isConnected = false;
+  let wsPingInterval = null;
 
-  function buildWsUrl() {
-    const ip   = (wsIpInput?.value  || "127.0.0.1").trim();
-    const port = (wsPortInput?.value|| "8080").trim();
-    return `ws://${ip}:${port}/ws`;
+  const connectionStatus = $("connectionStatus");
+  const errorMessage     = $("errorMessage");
+
+  function showConnError(msg) {
+    if (errorMessage) { errorMessage.textContent = msg; errorMessage.className = "conn-error-bar"; }
+    addLog(`Erreur : ${msg}`, "warn");
   }
 
-  function setWsState(state) {
-    if (!wsBadge||!wsLabel||!wsDot) return;
-    wsBadge.className = "ws-status-badge";
-    const cfg = {
-      disconnected:{ cls:"",           label:"Déconnecté",  btns:[true,false]  },
-      connecting:  { cls:"connecting", label:"Connexion…",  btns:[false,false] },
-      connected:   { cls:"connected",  label:"Connecté",    btns:[false,true]  },
-      error:       { cls:"",           label:"Erreur",       btns:[true,false]  }
-    };
-    const s = cfg[state]||cfg.disconnected;
-    if (s.cls) wsBadge.classList.add(s.cls);
-    wsLabel.textContent = s.label;
-    if (btnConnect)    btnConnect.disabled    = !s.btns[0];
-    if (btnDisconnect) btnDisconnect.disabled = !s.btns[1];
-    if (sidebarBackendStatus) sidebarBackendStatus.textContent = s.label;
-    if (systBackend)          systBackend.textContent          = s.label;
+  function clearConnError() {
+    if (errorMessage) { errorMessage.textContent = ""; errorMessage.className = "conn-error-bar hidden"; }
+  }
+
+  function setConnectedUI(connected) {
+    isConnected = connected;
+    if (connectionStatus) {
+      connectionStatus.textContent = connected ? "Connecté" : "Déconnecté";
+      connectionStatus.className   = connected ? "conn-status-bar success" : "conn-status-bar";
+    }
+    if (btnConnect)    btnConnect.disabled    = connected;
+    if (btnDisconnect) btnDisconnect.disabled = !connected;
+    if (sidebarBackendStatus) sidebarBackendStatus.textContent = connected ? "Connecté" : "–";
+    if (systBackend)          systBackend.textContent          = connected ? "Connecté" : "–";
+    addLog(connected ? "WebSocket connecté" : "WebSocket déconnecté", connected ? "info" : "warn");
+  }
+
+  function validateAndBuildUrl() {
+    const ip   = (wsIpInput?.value   || "").trim();
+    const port = (wsPortInput?.value || "").trim();
+    const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipPattern.test(ip))                           return { error: "Adresse IP invalide" };
+    if (ip.split(".").some(o => parseInt(o,10) > 255)) return { error: "Adresse IP invalide (octets > 255)" };
+    if (!port || isNaN(parseInt(port,10)))             return { error: "Port invalide" };
+    return { url: `ws://${ip}:${port}/` };
   }
 
   function wsConnect() {
-    if (ws && ws.readyState!==WebSocket.CLOSED) ws.close();
-    const url = buildWsUrl();
-    setWsState("connecting");
-    addLog(`Connexion → ${url}`, "info");
-    try { ws = new WebSocket(url); }
-    catch(e) { setWsState("error"); addLog(`URL invalide : ${e.message}`,"warn"); return; }
+    clearConnError();
+    if (ws && ws.readyState !== WebSocket.CLOSED) ws.close();
+
+    const result = validateAndBuildUrl();
+    if (result.error) { showConnError(result.error); return; }
+
+    if (connectionStatus) { connectionStatus.textContent = "Connexion…"; connectionStatus.className = "conn-status-bar"; }
+    if (btnConnect) btnConnect.disabled = true;
+    addLog(`Tentative connexion → ${result.url}`, "info");
+
+    try { ws = new WebSocket(result.url); }
+    catch(e) {
+      showConnError("Erreur de connexion : " + e.message);
+      if (btnConnect) btnConnect.disabled = false;
+      return;
+    }
 
     ws.onopen = () => {
-      setWsState("connected");
-      addLog("WebSocket connecté", "info");
-      wsPingInterval = setInterval(()=>{
-        if (ws&&ws.readyState===WebSocket.OPEN) {
-          wsPingStart=performance.now();
-          try { ws.send(JSON.stringify({type:"ping"})); } catch(_){}
+      setConnectedUI(true);
+      wsPingInterval = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          try { ws.send(JSON.stringify({ type: "ping" })); } catch(_) {}
         }
       }, 5000);
+    };
+
+    ws.onerror = () => {
+      showConnError("Erreur de connexion au serveur");
+      setConnectedUI(false);
+    };
+
+    ws.onclose = (e) => {
+      clearInterval(wsPingInterval);
+      setConnectedUI(false);
+      addLog(`WebSocket fermé (code ${e.code})`, "info");
     };
 
     ws.onmessage = (evt) => {
       try {
         const data = JSON.parse(evt.data);
-        if (data.type==="pong"&&wsPingStart) { wsPingStart=0; return; }
-        if (data.motor)   renderMotor(data.motor);
-        if (data.sensors) renderSensors(data.sensors);
-        if (data.battery) renderBattery(data.battery);
-        if (data.gouverne)renderGouv(data.gouverne);
-        if (data.rpm_actual!==undefined||data.status==="RUN"||data.status==="STOP") renderMotor(data);
-      } catch(_) { addLog(`WS: ${evt.data.substring(0,60)}`,"info"); }
+        if (data.type === "pong") return;
+        if (data.motor)    renderMotor(data.motor);
+        if (data.sensors)  renderSensors(data.sensors);
+        if (data.battery)  renderBattery(data.battery);
+        if (data.gouverne) renderGouv(data.gouverne);
+        if (data.rpm_actual !== undefined || data.status === "RUN" || data.status === "STOP") renderMotor(data);
+      } catch(_) { addLog(`WS msg: ${evt.data.toString().substring(0,60)}`, "info"); }
     };
-
-    ws.onerror = ()=>{ setWsState("error"); addLog("Erreur WebSocket","warn"); };
-    ws.onclose = (e)=>{ setWsState("disconnected"); clearInterval(wsPingInterval); addLog(`WebSocket fermé (${e.code})`,"info"); };
   }
 
-  function wsDisconnect() {
+  async function wsDisconnect() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) { showConnError("Aucune connexion active"); return; }
     clearInterval(wsPingInterval);
-    if (ws) { ws.close(); ws=null; }
-    setWsState("disconnected");
+    try {
+      const ip   = wsIpInput?.value.trim()   || "127.0.0.1";
+      const port = wsPortInput?.value.trim() || "5500";
+      try {
+        const res = await fetch(`http://${ip}:${port}/disconnect`);
+        if (res.ok) { const d = await res.json(); addLog(d.message || "Déconnexion OK", "info"); }
+      } catch(_) { addLog("Fermeture socket directe", "info"); }
+      ws.close(); ws = null;
+      setConnectedUI(false);
+    } catch(e) { showConnError("Erreur déconnexion : " + e.message); }
   }
 
   if (btnConnect)    btnConnect.addEventListener("click",    wsConnect);
