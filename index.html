@@ -56,32 +56,31 @@
 
         <!-- Connexion WebSocket -->
         <div class="card span-12 card-connexion">
-          <div class="card-header">
-            <div>
-              <h3>Connexion au serveur</h3>
-              <p>Adresse IP et port du backend — WebSocket temps réel</p>
+          <div class="conn-card-title">
+            <span class="conn-accent-bar"></span>
+            <h3>Connexion au serveur</h3>
+          </div>
+
+          <div class="conn-fields-row">
+            <div class="conn-field-group conn-field-ip">
+              <label for="wsIp">ADRESSE IP</label>
+              <input id="wsIp" type="text" placeholder="127.0.0.1" value="127.0.0.1" spellcheck="false" autocomplete="off" />
             </div>
-            <div class="ws-status-badge" id="wsBadge">
-              <span class="ws-dot" id="wsDot"></span>
-              <span id="wsLabel">Déconnecté</span>
+            <div class="conn-field-group conn-field-port">
+              <label for="wsPort">PORT</label>
+              <input id="wsPort" type="number" placeholder="5500" value="5500" min="1" max="65535" />
             </div>
           </div>
-          <div class="connexion-form">
-            <div class="connexion-fields">
-              <div class="connexion-field">
-                <label for="wsIp">Adresse IP</label>
-                <input id="wsIp" type="text" placeholder="192.168.1.100" value="127.0.0.1" spellcheck="false" />
-              </div>
-              <div class="connexion-field connexion-field--port">
-                <label for="wsPort">Port</label>
-                <input id="wsPort" type="number" placeholder="8080" value="8080" min="1" max="65535" />
-              </div>
-            </div>
-            <div class="connexion-actions">
-              <button class="btn-connect" id="btnConnect">Connecter</button>
-              <button class="btn-disconnect" id="btnDisconnect" disabled>Déconnecter</button>
-            </div>
+
+          <div class="conn-btn-row">
+            <button class="conn-btn-connect" id="btnConnect">
+              <span class="conn-btn-dot"></span>CONNECTER
+            </button>
+            <button class="conn-btn-disconnect" id="btnDisconnect" disabled>DÉCONNECTER</button>
           </div>
+
+          <div class="conn-status-bar" id="connectionStatus">Déconnecté</div>
+          <div class="conn-error-bar hidden" id="errorMessage"></div>
         </div>
 
         <!-- Résumé Moteur -->
