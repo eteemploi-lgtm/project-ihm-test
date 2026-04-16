@@ -1,0 +1,39 @@
+
+<!-- Modal équipement -->
+<div class="modal hidden" id="deviceModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div><h3 id="modalTitle">Détail équipement</h3><p id="modalSubtitle">Données temps réel</p></div>
+      <button class="close-btn" id="closeModalBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-stats">
+        <div class="modal-stat"><span>Statut</span><strong id="modalStatus">OK</strong></div>
+        <div class="modal-stat"><span>Valeur actuelle</span><strong id="modalCurrent">–</strong></div>
+        <div class="modal-stat"><span>Seuil max</span><strong id="modalThreshold">–</strong></div>
+      </div>
+      <div class="chart-wrap modal-chart"><canvas id="deviceChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
+
+
+<section id="systeme" class="tab-content">
+      <div class="grid">
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>État système</h3><p>Informations générales et diagnostics</p></div>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><span class="kpi-label">Version IHM</span><span class="kpi-value" style="font-size:18px">v1.0</span></div>
+            <div class="kpi"><span class="kpi-label">Backend</span><span class="kpi-value success-text" style="font-size:18px" id="systBackend">–</span></div>
+            <div class="kpi"><span class="kpi-label">Uptime</span><span class="kpi-value" style="font-size:18px" id="systUptime">00:00:00</span></div>
+            <div class="kpi"><span class="kpi-label">Mode</span><span class="kpi-value" style="font-size:18px">Supervision</span></div>
+          </div>
+        </div>
+      </div>
+</section>
