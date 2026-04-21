@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IHM Supervision Industrielle</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">IHM</div>
+      <div>
+        <h1>IHM Devices</h1>
+        <p>Supervision industrielle</p>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-tab="dashboard"><span class="nav-icon nav-icon--dash"></span>Vue générale</button>
+      <button class="nav-btn" data-tab="sequence"><span class="nav-icon nav-icon--seq"></span>Séquence</button>
+      <button class="nav-btn" data-tab="moteur"><span class="nav-icon nav-icon--motor"></span>Moteur</button>
+      <button class="nav-btn" data-tab="gouverne"><span class="nav-icon nav-icon--gouv"></span>Gouverne</button>
+      <button class="nav-btn" data-tab="sensors"><span class="nav-icon nav-icon--sensor"></span>Capteurs</button>
+      <button class="nav-btn" data-tab="batteries"><span class="nav-icon nav-icon--bat"></span>Batteries</button>
+      <button class="nav-btn" data-tab="systeme"><span class="nav-icon nav-icon--sys"></span>Système</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="system-state">
+        <span class="state-dot online"></span>
+        <span id="sysStateLabel">Système opérationnel</span>
+      </div>
+      <div class="sidebar-meta">
+        <span>Backend : <strong id="sidebarBackendStatus">–</strong></span>
+        <span>IHM v1.0</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h2 id="pageTitle">Vue générale</h2>
+        <p id="pageSubtitle">Supervision temps réel des équipements</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="ghost-btn" id="refreshBtn">↺ Actualiser</button>
+        <button class="ghost-btn" id="pauseBtn">⏸ Pause</button>
+        <button class="danger-btn" id="globalShutdownBtn">⏻ Shutdown</button>
+      </div>
+    </header>
+
+    <!-- ══════════ DASHBOARD ══════════ -->
+    <section id="dashboard" class="tab-content active">
+      <div class="grid">
+
+        <!-- Connexion WebSocket -->
+        <div class="card span-12 card-connexion">
+          <div class="conn-card-title">
+            <span class="conn-accent-bar"></span>
+            <h3>Connexion au serveur</h3>
+          </div>
+
+          <div class="conn-fields-row">
+            <div class="conn-field-group conn-field-ip">
+              <label for="wsIp">ADRESSE IP</label>
+              <input id="wsIp" type="text" placeholder="127.0.0.1" value="127.0.0.1" spellcheck="false" autocomplete="off" />
+            </div>
+            <div class="conn-field-group conn-field-port">
+              <label for="wsPort">PORT</label>
+              <input id="wsPort" type="number" placeholder="5500" value="5500" min="1" max="65535" />
+            </div>
+          </div>
+
+          <div class="conn-btn-row">
+            <button class="conn-btn-connect" id="btnConnect">
+              <span class="conn-btn-dot"></span>CONNECTER
+            </button>
+            <button class="conn-btn-disconnect" id="btnDisconnect" disabled>DÉCONNECTER</button>
+          </div>
+
+          <div class="conn-status-bar" id="connectionStatus">Déconnecté</div>
+          <div class="conn-error-bar hidden" id="errorMessage"></div>
+        </div>
+
+        <!-- Résumé Moteur -->
+        <div class="card span-4">
+          <div class="card-header">
+            <div><h3>Moteur</h3><p>Résumé état moteur principal</p></div>
+            <span class="status-pill ok" id="dashMotorBadge">RUN</span>
+          </div>
+          <div class="dash-summary">
+            <div class="dash-row"><span>Statut</span><strong id="dashMotorStatus">RUN</strong></div>
+            <div class="dash-row"><span>RPM actuel</span><strong id="dashRpmActual">–</strong></div>
+            <div class="dash-row"><span>RPM consigne</span><strong id="dashRpmCmd">–</strong></div>
+            <div class="dash-row"><span>Température</span><strong id="dashMotorTemp">–</strong></div>
+          </div>
+        </div>
+
+        <!-- Résumé Capteurs -->
+        <div class="card span-4">
+          <div class="card-header">
+            <div><h3>Capteurs</h3><p>État rapide des capteurs terrain</p></div>
+          </div>
+          <div class="dash-summary">
+            <div class="dash-row"><span>Eau</span><span class="led-sm" id="dashLedEau" data-state="unknown"></span></div>
+            <div class="dash-row"><span>Pression</span><span class="led-sm" id="dashLedPression" data-state="unknown"></span></div>
+            <div class="dash-row-leds">
+              <span>Température</span>
+              <div class="dash-leds-group">
+                <span class="led-label">1</span><span class="led-sm" id="dashLedTemp1" data-state="unknown"></span>
+                <span class="led-label">2</span><span class="led-sm" id="dashLedTemp2" data-state="unknown"></span>
+                <span class="led-label">3</span><span class="led-sm" id="dashLedTemp3" data-state="unknown"></span>
+                <span class="led-label">P</span><span class="led-sm" id="dashLedTempP" data-state="unknown"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Résumé Batterie -->
+        <div class="card span-4">
+          <div class="card-header">
+            <div><h3>Batterie</h3><p>Niveau et état du pack batterie</p></div>
+            <span class="status-pill warn" id="dashBatBadge">MONITOR</span>
+          </div>
+          <div class="dash-summary">
+            <div class="dash-row"><span>Niveau</span><strong id="dashBatLevel">78%</strong></div>
+            <div class="dash-row"><span>Température</span><strong id="dashBatTemp">31°C</strong></div>
+            <div class="dash-row"><span>État</span><strong id="dashBatEtat">Charge</strong></div>
+            <div class="dash-row"><span>Alarme</span><strong id="dashBatAlarme" class="success-text">Aucune</strong></div>
+          </div>
+        </div>
+
+        <!-- Graphe performances -->
+        <div class="card span-7">
+          <div class="card-header">
+            <div><h3>Performances moteur</h3><p>Évolution RPM / Température</p></div>
+            <div class="chart-toggle-group">
+              <button class="chart-toggle active" data-series="0" data-chart="mainChart">RPM</button>
+              <button class="chart-toggle active" data-series="1" data-chart="mainChart">Température</button>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+        </div>
+
+        <!-- Journal opérateur -->
+        <div class="card span-5">
+          <div class="card-header">
+            <div><h3>Journal opérateur</h3><p>Événements récents</p></div>
+          </div>
+          <div class="log-list" id="logList"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════ SÉQUENCE ══════════ -->
+    <section id="sequence" class="tab-content">
+      <div class="grid">
+
+        <div class="card span-12 card-motor-banner">
+          <div class="motor-banner-content">
+            <div class="motor-banner-title">
+              <span class="motor-banner-dot" id="seqBannerDot"></span>
+              <div><h3>Gestion des séquences</h3><p>Séquence manuelle (10 étapes) ou automatique</p></div>
+            </div>
+            <span class="status-pill" id="seqStatusBadge">IDLE</span>
+          </div>
+        </div>
+
+        <!-- SÉQUENCE MANUELLE -->
+        <div class="card span-7">
+          <div class="card-header">
+            <div><h3>Séquence manuelle</h3><p>Exécution étape par étape</p></div>
+          </div>
+          <div class="seq-list">
+            <div class="seq-item" id="seqItem1">
+              <span class="seq-num">01</span>
+              <span class="seq-name">Alimentation courant</span>
+              <span class="led-sm seq-led" id="seqLed1" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle1" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn1">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem2">
+              <span class="seq-num">02</span>
+              <span class="seq-name">Reset Shutdown</span>
+              <span class="led-sm seq-led" id="seqLed2" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle2" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn2">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem3">
+              <span class="seq-num">03</span>
+              <span class="seq-name">Allumage du 48V</span>
+              <span class="led-sm seq-led" id="seqLed3" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle3" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn3">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem4">
+              <span class="seq-num">04</span>
+              <span class="seq-name">Attente Magic</span>
+              <span class="led-sm seq-led" id="seqLed4" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle4" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn4">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem5">
+              <span class="seq-num">05</span>
+              <span class="seq-name">Attente velib</span>
+              <span class="led-sm seq-led" id="seqLed5" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle5" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn5">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem6">
+              <span class="seq-num">06</span>
+              <span class="seq-name">Passage KAPa On</span>
+              <span class="led-sm seq-led" id="seqLed6" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle6" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn6">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem7">
+              <span class="seq-num">07</span>
+              <span class="seq-name">Passage Puissance On</span>
+              <span class="led-sm seq-led" id="seqLed7" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle7" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn7">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem8">
+              <span class="seq-num">08</span>
+              <span class="seq-name">Passage KAPa Off</span>
+              <span class="led-sm seq-led" id="seqLed8" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle8" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn8">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem9">
+              <span class="seq-num">09</span>
+              <span class="seq-name">Mode Safety a On</span>
+              <span class="led-sm seq-led" id="seqLed9" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle9" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn9">Valider</button>
+            </div>
+            <div class="seq-item" id="seqItem10">
+              <span class="seq-num">10</span>
+              <span class="seq-name">Séquence finale</span>
+              <span class="led-sm seq-led" id="seqLed10" data-state="unknown"></span>
+              <div class="seq-toggle" id="seqToggle10" data-active="0">
+                <span class="seq-toggle-label seq-toggle-off">NON</span>
+                <span class="seq-toggle-thumb"></span>
+                <span class="seq-toggle-label seq-toggle-on">OUI</span>
+              </div>
+              <button class="seq-validate-btn" id="seqBtn10">Valider</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SÉQUENCE AUTOMATIQUE -->
+        <div class="card span-5">
+          <div class="card-header">
+            <div><h3>Séquence automatique</h3><p>Lancement automatique de la séquence complète</p></div>
+          </div>
+          <div class="seq-auto-panel">
+            <div class="seq-auto-status">
+              <div class="seq-auto-row">
+                <span class="led-sm" id="seqAutoLed" data-state="unknown"></span>
+                <span id="seqAutoLabel">En attente</span>
+              </div>
+              <div class="seq-auto-progress">
+                <div class="seq-auto-bar" id="seqAutoBar" style="width:0%"></div>
+              </div>
+              <span class="seq-auto-pct" id="seqAutoPct">0 / 10</span>
+            </div>
+            <button class="seq-auto-launch-btn" id="seqAutoBtn">▶ Lancer séquence auto</button>
+            <button class="seq-auto-stop-btn hidden" id="seqAutoStopBtn">■ Arrêter</button>
+            <div class="motor-command-feedback" id="seqAutoFeedback">Aucune séquence active.</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════ MOTEUR ══════════ -->
+    <section id="moteur" class="tab-content">
+      <div class="grid">
+
+        <!-- Bandeau -->
+        <div class="card span-12 card-motor-banner">
+          <div class="motor-banner-content">
+            <div class="motor-banner-title">
+              <span class="motor-banner-dot" id="motorBannerDot"></span>
+              <div><h3>Moteur principal — SMO</h3><p>Supervision et commande du moteur de propulsion</p></div>
+            </div>
+            <div class="banner-indicators-row">
+              <div class="banner-ind-item">
+                <span class="led-sm" id="motorIndStatut" data-state="unknown"></span>
+                <span>Statut</span>
+              </div>
+              <div class="banner-ind-sep"></div>
+              <div class="banner-ind-item">
+                <span class="led-sm" id="motorIndSeq" data-state="unknown"></span>
+                <span>Séquence</span>
+              </div>
+              <div class="banner-ind-sep"></div>
+              <div class="banner-ind-item">
+                <span class="led-sm" id="motorIndRun" data-state="unknown"></span>
+                <span>Run</span>
+              </div>
+            </div>
+            <span class="status-pill ok" id="motorStatusBadge">RUN</span>
+          </div>
+        </div>
+
+        <!-- Commande opérationnelle -->
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Commande opérationnelle</h3><p>Lancement séquence et run moteur</p></div>
+          </div>
+          <div class="op-cmd-row-wide">
+            <button class="op-btn-wide op-btn-wide--seq" id="motorSeqBtn">
+              <span class="led-sm" id="motorSeqLed" data-state="unknown"></span>
+              <span class="op-btn-wide-label">Séquence</span>
+            </button>
+            <button class="op-btn-wide op-btn-wide--run" id="motorRunBtn">
+              <span class="led-sm" id="motorRunLed" data-state="unknown"></span>
+              <span class="op-btn-wide-label">Run</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Commande RPM + Infos côte à côte -->
+        <div class="card span-5">
+          <div class="card-header">
+            <div><h3>Commande moteur</h3><p>Saisie de la consigne RPM</p></div>
+          </div>
+          <div class="motor-command-box">
+            <label class="motor-command-label" for="rpmInput">Consigne RPM (0 – 3000 tr/min)</label>
+            <div class="motor-input-row">
+              <input id="rpmInput" type="number" min="0" max="3000" step="10" value="1500" placeholder="Entrer la vitesse" />
+              <button id="sendRpmBtn" class="btn-primary">Entrée</button>
+            </div>
+            <div class="motor-command-feedback" id="motorCommandFeedback">Aucune commande envoyée.</div>
+          </div>
+        </div>
+
+        <div class="card span-7">
+          <div class="card-header">
+            <div><h3>Informations moteur</h3><p>État courant en temps réel</p></div>
+          </div>
+          <div class="motor-info-grid">
+            <div class="motor-info-box"><span class="motor-info-label">Statut</span><strong id="motorStatus">RUN</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">RPM actuel</span><strong id="motorRpmActual">– tr/min</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">RPM consigné</span><strong id="motorRpmCmd">– tr/min</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">Temp. moteur</span><strong id="motorTemperature">– °C</strong></div>
+          </div>
+          <div class="rpm-gauge-wrap">
+            <div class="rpm-gauge-header">
+              <span class="motor-info-label">Charge RPM</span>
+              <span id="rpmGaugePct">–%</span>
+            </div>
+            <div class="rpm-gauge-track">
+              <div class="rpm-gauge-fill" id="rpmGaugeFill" style="width:0%"></div>
+            </div>
+            <div class="rpm-gauge-scale">
+              <span>0</span><span>1107</span><span>2214</span><span>3321</span><span>4428</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Courbe moteur — RPM + 4 températures -->
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Courbe moteur</h3><p>RPM · TempSmo1 · TempSmo2 · TempSmo3 · TempPlaque</p></div>
+            <div class="chart-toggle-group">
+              <button class="chart-toggle active" data-series="0" data-chart="motorChart">RPM</button>
+              <button class="chart-toggle active" data-series="1" data-chart="motorChart">T°Smo1</button>
+              <button class="chart-toggle active" data-series="2" data-chart="motorChart">T°Smo2</button>
+              <button class="chart-toggle active" data-series="3" data-chart="motorChart">T°Smo3</button>
+              <button class="chart-toggle active" data-series="4" data-chart="motorChart">T°Plaque</button>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="motorChart"></canvas></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════ GOUVERNE ══════════ -->
+    <section id="gouverne" class="tab-content">
+      <div class="grid">
+
+        <!-- Bandeau — indicateurs sur une ligne -->
+        <div class="card span-12 card-motor-banner">
+          <div class="motor-banner-content">
+            <div class="motor-banner-title">
+              <span class="motor-banner-dot" id="gouvBannerDot"></span>
+              <div><h3>Gouvernes — Positionneurs</h3><p>4 gouvernes CANopen</p></div>
+            </div>
+            <!-- 4 gouvernes × (Statut + Run) sur une ligne, Séq. unique commune -->
+            <div class="gouv-banner-row">
+              <div class="gouv-banner-col">
+                <span class="gouv-status-name gouv-sup">G1 Sup</span>
+                <div class="gouv-banner-leds">
+                  <span class="led-sm" id="gSupStatut" data-state="unknown"></span><span class="gouv-led-lbl">S</span>
+                  <span class="led-sm" id="gSupRun"    data-state="unknown"></span><span class="gouv-led-lbl">R</span>
+                </div>
+              </div>
+              <div class="gouv-banner-sep"></div>
+              <div class="gouv-banner-col">
+                <span class="gouv-status-name gouv-tri">G2 Tri</span>
+                <div class="gouv-banner-leds">
+                  <span class="led-sm" id="gTriStatut" data-state="unknown"></span><span class="gouv-led-lbl">S</span>
+                  <span class="led-sm" id="gTriRun"    data-state="unknown"></span><span class="gouv-led-lbl">R</span>
+                </div>
+              </div>
+              <div class="gouv-banner-sep"></div>
+              <div class="gouv-banner-col">
+                <span class="gouv-status-name gouv-inf">G3 Inf</span>
+                <div class="gouv-banner-leds">
+                  <span class="led-sm" id="gInfStatut" data-state="unknown"></span><span class="gouv-led-lbl">S</span>
+                  <span class="led-sm" id="gInfRun"    data-state="unknown"></span><span class="gouv-led-lbl">R</span>
+                </div>
+              </div>
+              <div class="gouv-banner-sep"></div>
+              <div class="gouv-banner-col">
+                <span class="gouv-status-name gouv-bab">G4 Bab</span>
+                <div class="gouv-banner-leds">
+                  <span class="led-sm" id="gBabStatut" data-state="unknown"></span><span class="gouv-led-lbl">S</span>
+                  <span class="led-sm" id="gBabRun"    data-state="unknown"></span><span class="gouv-led-lbl">R</span>
+                </div>
+              </div>
+              <div class="gouv-banner-sep"></div>
+              <!-- Séquence commune unique -->
+              <div class="gouv-banner-col">
+                <span class="gouv-status-name" style="color:var(--muted)">Séq.</span>
+                <div class="gouv-banner-leds">
+                  <span class="led-sm" id="gouvSeqLed" data-state="unknown"></span>
+                </div>
+              </div>
+            </div>
+            <span class="status-pill warn" id="gouvStatusBadge">CHECK</span>
+          </div>
+        </div>
+
+        <!-- Retour mesures (gauche) + Commande position (droite) -->
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>Retour mesures</h3><p>stGOUVERNE2SCG — TxPDO</p></div>
+          </div>
+          <div class="gouv-table-wrap">
+            <table class="table gouv-measures-table">
+              <thead>
+                <tr><th>Gouverne</th><th>État</th><th>Position</th><th>Vitesse</th><th>Couple</th><th>SW</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="gouv-name gouv-sup">Sup</td>
+                  <td><span class="led" id="ledGouvSup" data-state="unknown"></span></td>
+                  <td id="gSup_pos">–</td><td id="gSup_vit">–</td><td id="gSup_cpl">–</td><td id="gSup_sw">–</td>
+                </tr>
+                <tr>
+                  <td class="gouv-name gouv-tri">Tri</td>
+                  <td><span class="led" id="ledGouvTri" data-state="unknown"></span></td>
+                  <td id="gTri_pos">–</td><td id="gTri_vit">–</td><td id="gTri_cpl">–</td><td id="gTri_sw">–</td>
+                </tr>
+                <tr>
+                  <td class="gouv-name gouv-inf">Inf</td>
+                  <td><span class="led" id="ledGouvInf" data-state="unknown"></span></td>
+                  <td id="gInf_pos">–</td><td id="gInf_vit">–</td><td id="gInf_cpl">–</td><td id="gInf_sw">–</td>
+                </tr>
+                <tr>
+                  <td class="gouv-name gouv-bab">Bab</td>
+                  <td><span class="led" id="ledGouvBab" data-state="unknown"></span></td>
+                  <td id="gBab_pos">–</td><td id="gBab_vit">–</td><td id="gBab_cpl">–</td><td id="gBab_sw">–</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Barres de position -->
+          <div class="rpm-gauge-wrap" style="margin-top:10px;">
+            <div class="rpm-gauge-header">
+              <span class="motor-info-label">Positions (±16.5° limite)</span>
+              <span id="gouvPosPct" style="font-size:10px;color:var(--muted)">—</span>
+            </div>
+            <div class="gouv-bars-row">
+              <div class="gouv-bar-item"><span class="gouv-bar-label gouv-sup">Sup</span><div class="rpm-gauge-track"><div class="rpm-gauge-fill gouv-fill"     id="gouvBarSup" style="width:50%"></div></div></div>
+              <div class="gouv-bar-item"><span class="gouv-bar-label gouv-tri">Tri</span><div class="rpm-gauge-track"><div class="rpm-gauge-fill gouv-fill-tri" id="gouvBarTri" style="width:50%"></div></div></div>
+              <div class="gouv-bar-item"><span class="gouv-bar-label gouv-inf">Inf</span><div class="rpm-gauge-track"><div class="rpm-gauge-fill gouv-fill-inf" id="gouvBarInf" style="width:50%"></div></div></div>
+              <div class="gouv-bar-item"><span class="gouv-bar-label gouv-bab">Bab</span><div class="rpm-gauge-track"><div class="rpm-gauge-fill gouv-fill-bab" id="gouvBarBab" style="width:50%"></div></div></div>
+            </div>
+            <div class="rpm-gauge-scale"><span>-150</span><span>-75</span><span>0</span><span>+75</span><span>+150</span></div>
+          </div>
+        </div>
+
+        <!-- Commande position (droite) -->
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>Commande position</h3><p>Consigne aux gouvernes sélectionnées</p></div>
+          </div>
+          <div class="motor-command-box">
+            <label class="motor-command-label" for="gouvPosInput">Consigne (−150 à +150)</label>
+            <div class="motor-input-row">
+              <input id="gouvPosInput" type="number" min="-150" max="150" step="0.5" value="0" />
+              <button id="sendGouvPosBtn" class="btn-primary">Envoyer</button>
+            </div>
+            <div class="motor-command-feedback" id="gouvCommandFeedback">Aucune commande envoyée.</div>
+          </div>
+          <div class="gouv-select-section">
+            <div class="gouv-select-title">Gouvernes cibles</div>
+            <div class="gouv-checkboxes">
+              <label class="gouv-cb gouv-cb--sup"><input type="checkbox" id="cbGouvSup" checked /><span class="gouv-cb-box"></span><span>Supérieure</span></label>
+              <label class="gouv-cb gouv-cb--tri"><input type="checkbox" id="cbGouvTri" checked /><span class="gouv-cb-box"></span><span>Tribord</span></label>
+              <label class="gouv-cb gouv-cb--inf"><input type="checkbox" id="cbGouvInf" checked /><span class="gouv-cb-box"></span><span>Inférieure</span></label>
+              <label class="gouv-cb gouv-cb--bab"><input type="checkbox" id="cbGouvBab" checked /><span class="gouv-cb-box"></span><span>Babord</span></label>
+            </div>
+            <button class="gouv-select-all" id="gouvSelectAll">Tout sélectionner</button>
+          </div>
+        </div>
+
+        <!-- Courbes (gauche) + Homing (droite) -->
+        <div class="card span-7">
+          <div class="card-header">
+            <div><h3>Courbes positions</h3><p>Évolution en temps réel · ±16.5°</p></div>
+            <div class="chart-toggle-group">
+              <button class="chart-toggle active" data-series="0" data-chart="gouvChart">Sup</button>
+              <button class="chart-toggle active" data-series="1" data-chart="gouvChart">Tri</button>
+              <button class="chart-toggle active" data-series="2" data-chart="gouvChart">Inf</button>
+              <button class="chart-toggle active" data-series="3" data-chart="gouvChart">Bab</button>
+            </div>
+          </div>
+          <div class="chart-wrap" style="height:220px;"><canvas id="gouvChart"></canvas></div>
+        </div>
+
+        <!-- Commande Homing (droite) -->
+        <div class="card span-5">
+          <div class="card-header">
+            <div><h3>Commande Homing</h3><p>Retour position zéro des gouvernes</p></div>
+          </div>
+          <div class="homing-panel">
+            <p class="homing-desc">Lance la procédure de homing pour remettre les gouvernes en position de référence.</p>
+            <button class="homing-btn" id="homingBtn">⌂ Lancer Homing</button>
+            <div class="motor-command-feedback" id="homingFeedback">Aucune procédure active.</div>
+            <div class="homing-validation hidden" id="homingValidation">
+              <p class="homing-confirm-label">Confirmer le homing ?</p>
+              <div class="homing-confirm-row">
+                <button class="homing-confirm-yes" id="homingYes">✓ Confirmer</button>
+                <button class="homing-confirm-no"  id="homingNo">✕ Annuler</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════ CAPTEURS ══════════ -->
+    <section id="sensors" class="tab-content">
+      <div class="grid">
+
+        <!-- Température — 4 sondes -->
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Capteur Température</h3><p>TempSmo1/2/3 + TempPlaque — stCAPTEURTEMPERATURES</p></div>
+          </div>
+          <table class="table sensor-table">
+            <thead>
+              <tr><th>Capteur</th><th class="col-led">État</th><th>Retour</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="sensor-name">TempSmo1_mes</td>
+                <td class="col-led"><span class="led" id="ledTemp1" data-state="unknown"></span></td>
+                <td id="retourTemp1">– °C</td>
+              </tr>
+              <tr>
+                <td class="sensor-name">TempSmo2_mes</td>
+                <td class="col-led"><span class="led" id="ledTemp2" data-state="unknown"></span></td>
+                <td id="retourTemp2">– °C</td>
+              </tr>
+              <tr>
+                <td class="sensor-name">TempSmo3_mes</td>
+                <td class="col-led"><span class="led" id="ledTemp3" data-state="unknown"></span></td>
+                <td id="retourTemp3">– °C</td>
+              </tr>
+              <tr>
+                <td class="sensor-name">TempPlaque_mes</td>
+                <td class="col-led"><span class="led" id="ledTempPlaque" data-state="unknown"></span></td>
+                <td id="retourTempPlaque">– °C</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pression -->
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>Capteur Pression</h3><p>Pbar_mes — stDATACAPTEURPRESSION</p></div>
+          </div>
+          <table class="table sensor-table">
+            <thead>
+              <tr><th>Capteur</th><th class="col-led">État</th><th>Retour</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="sensor-name">Pbar_mes</td>
+                <td class="col-led"><span class="led" id="ledPression" data-state="unknown"></span></td>
+                <td id="retourPression">– bar</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Eau -->
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>Capteur Eau</h3><p>etat_capteur_eau — stDATACAPTEUREAU</p></div>
+          </div>
+          <table class="table sensor-table">
+            <thead>
+              <tr><th>Capteur</th><th class="col-led">État</th><th>Retour</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="sensor-name">etat_capteur_eau</td>
+                <td class="col-led"><span class="led" id="ledEau" data-state="unknown"></span></td>
+                <td id="retourEau">–</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════ BATTERIES ══════════ -->
+    <section id="batteries" class="tab-content">
+      <div class="grid">
+
+        <!-- Bandeau statut + barre niveau -->
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Pack batterie</h3><p>stDeviceBatterie — stSBA2SCG_ETAT + stSba2Scg_Info</p></div>
+            <span class="status-pill warn" id="batStatusBadge">MONITOR</span>
+          </div>
+          <div class="bat-level-display">
+            <div class="bat-pct-text" id="batPctText">–%</div>
+            <div class="bat-bar-track"><div class="bat-bar-fill" id="batBarFill" style="width:0%"></div></div>
+            <div class="bat-bar-scale"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+          </div>
+        </div>
+
+        <!-- État BMS — stSBA2SCG_ETAT -->
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>État BMS</h3><p>stSBA2SCG_ETAT</p></div>
+          </div>
+          <div class="bat-data-grid">
+            <div class="bat-data-row"><span>batt_i (Intensité)</span><strong id="batI">– A</strong></div>
+            <div class="bat-data-row"><span>batt_u (Tension)</span><strong id="batU">– V</strong></div>
+            <div class="bat-data-row"><span>batt_uCharge</span><strong id="batUCharge">– V</strong></div>
+            <div class="bat-data-row"><span>batt_uDech</span><strong id="batUDech">– V</strong></div>
+            <div class="bat-data-row"><span>batt_T (Température)</span><strong id="batTemp" class="warning-text">– °C</strong></div>
+            <div class="bat-data-row"><span>batt_Power</span><strong id="batPower">– W</strong></div>
+            <div class="bat-data-row"><span>batt_Capacite</span><strong id="batCapacite">– Ah</strong></div>
+            <div class="bat-data-row"><span>batt_Energie</span><strong id="batEnergie">– Wh</strong></div>
+          </div>
+        </div>
+
+        <!-- Info BMS + Tensions éléments — stSba2Scg_Info + stSba2Scg_EltTension -->
+        <div class="card span-6">
+          <div class="card-header">
+            <div><h3>Info + Tensions éléments</h3><p>stSba2Scg_Info + stSBA2SCG_ELEMENTTENSION</p></div>
+          </div>
+          <div class="bat-data-grid">
+            <div class="bat-data-row"><span>uelmin (Tension elt min)</span><strong id="batUelmin">– V</strong></div>
+            <div class="bat-data-row"><span>uelmax (Tension elt max)</span><strong id="batUelmax">– V</strong></div>
+            <div class="bat-data-row"><span>Tmin (Temp min)</span><strong id="batTmin">– °C</strong></div>
+            <div class="bat-data-row highlight-temp"><span>Tmax (Temp max)</span><strong id="batTmax">– °C</strong></div>
+            <div class="bat-data-row"><span>BMSstate</span><strong id="batBMSstate">–</strong></div>
+            <div class="bat-data-row sep-row"><span>uelement1</span><strong id="batUelt1">– V</strong></div>
+            <div class="bat-data-row"><span>uelement2</span><strong id="batUelt2">– V</strong></div>
+            <div class="bat-data-row"><span>uelement3</span><strong id="batUelt3">– V</strong></div>
+            <div class="bat-data-row"><span>uelement4</span><strong id="batUelt4">– V</strong></div>
+          </div>
+        </div>
+
+        <!-- Températures disques — stSBA2SCG_ELEMENTTEMPERATURE -->
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>Températures disques</h3><p>stSba2Scg_EltTemperature — stSBA2SCG_ELEMENTTEMPERATURE</p></div>
+          </div>
+          <div class="motor-info-grid">
+            <div class="motor-info-box highlight-temp"><span class="motor-info-label">t1_disque</span><strong id="batT1Disque">– °C</strong></div>
+            <div class="motor-info-box highlight-temp"><span class="motor-info-label">t2_disque</span><strong id="batT2Disque">– °C</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">U min cellule (config)</span><strong id="batUmin">3.62 V</strong></div>
+            <div class="motor-info-box"><span class="motor-info-label">U max cellule (config)</span><strong id="batUmax">3.79 V</strong></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════ SYSTÈME ══════════ -->
+    <section id="systeme" class="tab-content">
+      <div class="grid">
+        <div class="card span-12">
+          <div class="card-header">
+            <div><h3>État système</h3><p>Informations générales et diagnostics</p></div>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><span class="kpi-label">Version IHM</span><span class="kpi-value" style="font-size:18px">v1.0</span></div>
+            <div class="kpi"><span class="kpi-label">Backend</span><span class="kpi-value success-text" style="font-size:18px" id="systBackend">–</span></div>
+            <div class="kpi"><span class="kpi-label">Uptime</span><span class="kpi-value" style="font-size:18px" id="systUptime">00:00:00</span></div>
+            <div class="kpi"><span class="kpi-label">Mode</span><span class="kpi-value" style="font-size:18px">Supervision</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Modal équipement -->
+<div class="modal hidden" id="deviceModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div><h3 id="modalTitle">Détail équipement</h3><p id="modalSubtitle">Données temps réel</p></div>
+      <button class="close-btn" id="closeModalBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-stats">
+        <div class="modal-stat"><span>Statut</span><strong id="modalStatus">OK</strong></div>
+        <div class="modal-stat"><span>Valeur actuelle</span><strong id="modalCurrent">–</strong></div>
+        <div class="modal-stat"><span>Seuil max</span><strong id="modalThreshold">–</strong></div>
+      </div>
+      <div class="chart-wrap modal-chart"><canvas id="deviceChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
