@@ -1,0 +1,891 @@
+// ============================================================
+//  Outil de Tête Acoustique — script.js
+// ============================================================
+
+let socket          = null;
+let isConnected     = false;
+let dernierEnvoi    = null;   // 'test' | 'sequence'
+let reemissionActif = true;
+let trameTestEnCours = false;
+
+// ── Variables DOM ─────────────────────────────────────────────
+let ipInput, PortInput, connectBtn, disconnectBtn;
+let connectionStatus, errorMessage, globalConnectionChip;
+
+let identInput, identLength, testBtn, sendStatus, NumMsgTest;
+let ReemissionInput, tempsInput;
+
+let identificationInput, identificationLength, numeroSequenceInput;
+let heureInput, VitesseInput, CapInput, BandeInput, AssietteInput;
+let abscisseInput, ordonneeInput, zInput, sendBtn, SequenceSendStatus, NumeroMsgInput;
+
+let NumMsgField, identResponseField, resultatField, detailField, NumSeqField, memssdField;
+let NumMsgInfo, identResponseInfo, resultatInfo, detailInfo, NumSeqInfo, memssdInfo;
+let NumMsgSeqField, identResponseSeqField, NumSeqbField, memssdSeqField;
+let NumMsgSeqInfo, identResponseSeqInfo, NumSeqbInfo, memssdSeqInfo;
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+
+    ipInput              = document.getElementById('ipAddress');
+    PortInput            = document.getElementById('PortComm');
+    connectBtn           = document.getElementById('connectBtn');
+    disconnectBtn        = document.getElementById('disconnectBtn');
+    connectionStatus     = document.getElementById('connectionStatus');
+    errorMessage         = document.getElementById('errorMessage');
+    globalConnectionChip = document.getElementById('globalConnectionChip');
+
+    identInput           = document.getElementById('ident');
+    identLength          = document.getElementById('identLength');
+    testBtn              = document.getElementById('testBtn');
+    sendStatus           = document.getElementById('sendStatus');
+    NumMsgTest           = document.getElementById('NumMsgTest');
+    ReemissionInput      = document.getElementById('Reemission');
+    tempsInput           = document.getElementById('temps');
+
+    identificationInput  = document.getElementById('identification');
+    identificationLength = document.getElementById('identificationLength');
+    numeroSequenceInput  = document.getElementById('numeroSequence');
+    heureInput           = document.getElementById('heure');
+    VitesseInput         = document.getElementById('Vitesse');
+    CapInput             = document.getElementById('Cap');
+    BandeInput           = document.getElementById('Bande');
+    AssietteInput        = document.getElementById('Assiette');
+    abscisseInput        = document.getElementById('abscisse');
+    ordonneeInput        = document.getElementById('ordonnee');
+    zInput               = document.getElementById('z');
+    sendBtn              = document.getElementById('sendBtn');
+    SequenceSendStatus   = document.getElementById('SequenceSendStatus');
+    NumeroMsgInput       = document.getElementById('NumeroMsg');
+
+    NumMsgField          = document.getElementById('NumMsg');
+    identResponseField   = document.getElementById('identResponse');
+    resultatField        = document.getElementById('resultat');
+    detailField          = document.getElementById('detail');
+    NumSeqField          = document.getElementById('NumSeq');
+    memssdField          = document.getElementById('memssd');
+    NumMsgInfo           = document.getElementById('NumMsgInfo');
+    identResponseInfo    = document.getElementById('identResponseInfo');
+    resultatInfo         = document.getElementById('resultatInfo');
+    detailInfo           = document.getElementById('detailInfo');
+    NumSeqInfo           = document.getElementById('NumSeqInfo');
+    memssdInfo           = document.getElementById('memssdInfo');
+
+    NumMsgSeqField          = document.getElementById('NumMsgSeq');
+    identResponseSeqField   = document.getElementById('identResponseSeq');
+    NumSeqbField            = document.getElementById('NumSeqb');
+    memssdSeqField          = document.getElementById('memssdSeq');
+    NumMsgSeqInfo           = document.getElementById('NumMsgSeqInfo');
+    identResponseSeqInfo    = document.getElementById('identResponseSeqInfo');
+    NumSeqbInfo             = document.getElementById('NumSeqbInfo');
+    memssdSeqInfo           = document.getElementById('memssdSeqInfo');
+
+    setInterval(updateSystemTime, 1000);
+    updateSystemTime();
+    setupEventListeners();
+    setWsState('disconnected');
+
+    document.querySelectorAll('form').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    addLog('SYSTEM', 'Interface initialisée');
+});
+
+// ============================================================
+//  HEURE
+// ============================================================
+function updateSystemTime() {
+    var now     = new Date(Date.now());
+    var hours   = String(now.getHours()).padStart(2, '0');
+    var minutes = String(now.getMinutes()).padStart(2, '0');
+    var seconds = String(now.getSeconds()).padStart(2, '0');
+    if (heureInput) heureInput.value = hours + ':' + minutes + ':' + seconds;
+}
+
+// ============================================================
+//  ÉCOUTEURS
+// ============================================================
+function setupEventListeners() {
+
+    if (connectBtn)    connectBtn.addEventListener('click', handleConnect);
+    if (disconnectBtn) disconnectBtn.addEventListener('click', handleDisconnect);
+    if (identInput)    identInput.addEventListener('input', handleIdentInput);
+    if (identificationInput) identificationInput.addEventListener('input', handleIdentificationInput);
+    if (testBtn)  testBtn.addEventListener('click',  handleTestClick);
+    if (sendBtn)  sendBtn.addEventListener('click',  handleSendClick);
+
+    [numeroSequenceInput, VitesseInput, CapInput, BandeInput,
+     AssietteInput, abscisseInput, ordonneeInput, zInput
+    ].forEach(function(input) {
+        if (input) input.addEventListener('input', checkExtendedFormValidity);
+    });
+
+    // ── Réémission toggle ──────────────────────────────────────
+    var btnOui = document.getElementById('reemissionOui');
+    var btnNon = document.getElementById('reemissionNon');
+
+    function setReemission(actif) {
+        reemissionActif = actif;
+        if (btnOui) btnOui.classList.toggle('active', actif);
+        if (btnNon) btnNon.classList.toggle('active', !actif);
+        if (ReemissionInput) {
+            ReemissionInput.disabled   = !actif;
+            ReemissionInput.style.opacity = actif ? '1' : '0.4';
+        }
+    }
+
+    if (btnOui) btnOui.addEventListener('click', function() { setReemission(true); });
+    if (btnNon) btnNon.addEventListener('click', function() { setReemission(false); });
+    setReemission(true);
+
+    // ── Logs boutons ───────────────────────────────────────────
+    var copyLogsBtn  = document.getElementById('copyLogsBtn');
+    var clearLogsBtn = document.getElementById('clearLogsBtn');
+    var exportLogsBtn = document.getElementById('exportLogsBtn');
+
+    var copyLogsBtn_t  = document.getElementById('copyLogsBtn_t');
+    var clearLogsBtn_t = document.getElementById('clearLogsBtn_t');
+    var exportLogsBtn_t = document.getElementById('exportLogsBtn_t');
+
+    var copyLogsBtn2  = document.getElementById('copyLogsBtn2');
+    var clearLogsBtn2 = document.getElementById('clearLogsBtn2');
+    var exportLogsBtn2 = document.getElementById('exportLogsBtn2');
+
+    function copierLogs() {
+        var lv = document.getElementById('logViewer');
+        if (navigator.clipboard && lv) {
+            navigator.clipboard.writeText(lv.value || '').then(function() {
+                addLog('SYSTEM', 'Logs copiés');
+            }).catch(function() {
+                showError('Impossible de copier les logs');
+            });
+        }
+    }
+
+    function effacerLogs() {
+        var lv = document.getElementById('logViewer');
+        if (lv) lv.value = '';
+        ['logViewer_t', 'logViewer2'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        updateLogMeta('--:--:--', '-- octets', '----');
+    }
+
+    if (copyLogsBtn)   copyLogsBtn.addEventListener('click',   copierLogs);
+    if (copyLogsBtn_t) copyLogsBtn_t.addEventListener('click', copierLogs);
+    if (copyLogsBtn2)  copyLogsBtn2.addEventListener('click',  copierLogs);
+
+    if (clearLogsBtn)   clearLogsBtn.addEventListener('click',   effacerLogs);
+    if (clearLogsBtn_t) clearLogsBtn_t.addEventListener('click', effacerLogs);
+    if (clearLogsBtn2)  clearLogsBtn2.addEventListener('click',  effacerLogs);
+
+    if (exportLogsBtn)   exportLogsBtn.addEventListener('click',   exportLogs);
+    if (exportLogsBtn_t) exportLogsBtn_t.addEventListener('click', exportLogs);
+    if (exportLogsBtn2)  exportLogsBtn2.addEventListener('click',  exportLogs);
+}
+
+// ============================================================
+//  CONNEXION
+// ============================================================
+function handleConnect() {
+    clearError();
+    var ip   = ipInput   ? ipInput.value.trim()   : '';
+    var Port = PortInput ? PortInput.value.trim()  : '';
+
+    var ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipPattern.test(ip)) { showError('Adresse IP invalide'); return; }
+
+    var octets = ip.split('.');
+    if (octets.some(function(o) { return parseInt(o, 10) > 255; })) {
+        showError('Adresse IP invalide (octets > 255)');
+        return;
+    }
+    if (!Port) { showError('Port invalide'); return; }
+
+    connectToServer(ip, Port);
+}
+
+function handleDisconnect() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        showError('Aucune connexion active');
+        return;
+    }
+    socket.close();
+    socket = null;
+    setWsState('disconnected');
+    addLog('SYSTEM', 'Déconnexion manuelle');
+}
+
+function connectToServer(ip, port) {
+    try {
+        setWsState('connecting');
+        addLog('SYSTEM', 'Connexion vers ws://' + ip + ':' + port + '/');
+
+        socket = new WebSocket('ws://' + ip + ':' + port + '/');
+
+        socket.onopen = function() {
+            setWsState('connected');
+            addLog('SYSTEM', 'WebSocket connecté');
+            trameTestEnCours = false;
+        };
+
+        socket.onerror = function(error) {
+            showError('Erreur de connexion au serveur');
+            setWsState('error');
+            addLog('ERROR', 'Erreur WebSocket');
+        };
+
+        socket.onclose = function() {
+            setWsState('disconnected');
+            addLog('SYSTEM', 'WebSocket déconnecté');
+        };
+
+        socket.onmessage = function(event) {
+            handleResponse(event.data);
+        };
+
+    } catch (error) {
+        setWsState('disconnected');
+        showError('Erreur de connexion : ' + error.message);
+    }
+}
+
+// ============================================================
+//  INPUTS
+// ============================================================
+function handleIdentInput() {
+    if (!identInput) return;
+    identInput.value = identInput.value.toUpperCase().replace(/[^a-zA-Z0-9]/g, '');
+    var length = identInput.value.length;
+    if (identLength) identLength.textContent = length + '/4 caractères';
+}
+
+function handleIdentificationInput() {
+    if (!identificationInput) return;
+    identificationInput.value = identificationInput.value.toUpperCase().replace(/[^a-zA-Z0-9]/g, '');
+    var length = identificationInput.value.length;
+    if (identificationLength) identificationLength.textContent = length + '/4 caractères';
+    checkExtendedFormValidity();
+}
+
+function checkExtendedFormValidity() {
+    if (!sendBtn) return;
+    var hasIdent = identificationInput ? identificationInput.value.length > 0  : false;
+    var hasSeq   = numeroSequenceInput ? numeroSequenceInput.value !== ''       : false;
+    var hasAbs   = abscisseInput       ? abscisseInput.value !== ''             : false;
+    var hasOrd   = ordonneeInput       ? ordonneeInput.value !== ''             : false;
+    var hasZ2    = zInput              ? zInput.value !== ''                    : false;
+    var hasVit   = VitesseInput        ? VitesseInput.value !== ''              : false;
+    var hasCap2  = CapInput            ? CapInput.value !== ''                  : false;
+    sendBtn.disabled = !(hasIdent && hasSeq && hasAbs && hasOrd && hasZ2 && hasVit && hasCap2);
+}
+
+// ============================================================
+//  TRAME TEST
+// ============================================================
+function handleTestClick() {
+    if (trameTestEnCours) return;
+    trameTestEnCours = true;
+    dernierEnvoi = 'test';
+
+    var ident = identInput ? identInput.value.padEnd(4, '\0') : '    ';
+    if (sendStatus) {
+        sendStatus.textContent = 'Envoi en cours...';
+        sendStatus.className   = 'status-bar warning';
+        sendStatus.classList.remove('hidden');
+    }
+    sendCommand(ident);
+
+    if (testBtn) {
+        testBtn.disabled      = true;
+        testBtn.textContent   = '✓ CMD Test envoyée';
+        testBtn.style.opacity = '0.5';
+        testBtn.title         = 'La commande Test ne peut être envoyée qu\'une seule fois par connexion';
+    }
+}
+
+function sendCommand(ident) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        showError('WebSocket non connecté');
+        trameTestEnCours = false;
+        return;
+    }
+    try {
+        var frame    = new ArrayBuffer(1020);
+        var view     = new Uint8Array(frame);
+        var dataView = new DataView(frame);
+        view.fill(0);
+
+        // Offset 0 : ident (4 octets char)
+        for (var i = 0; i < 4; i++) {
+            view[i] = ident.charCodeAt(i);
+        }
+
+        // Offset 4 : NumMsgTest (uint32 little-endian)
+        var msgNum = parseInt(NumMsgTest ? NumMsgTest.value : '7', 10) || 7;
+        dataView.setUint32(4, msgNum, true);
+
+        var checksum   = calculateChecksumFromBuffer(frame);
+        var finalFrame = new ArrayBuffer(1024);
+        var finalView  = new Uint8Array(finalFrame);
+        finalView.set(view, 0);
+        finalView.set(checksum, 1020);
+
+        socket.send(finalFrame);
+
+        if (sendStatus) {
+            sendStatus.textContent = 'Commande Test envoyée — en attente de réponse...';
+            sendStatus.className   = 'status-bar warning';
+            sendStatus.classList.remove('hidden');
+        }
+
+        var identClean = ident.split('').filter(function(c) { return c.charCodeAt(0) !== 0; }).join('');
+        addLog('SEND', 'CMD TEST | ident=' + identClean + ' | msgNum=' + msgNum);
+
+        afficherDetailTrameTest(finalView, checksum, ident);
+
+    } catch (error) {
+        showError('Erreur envoi CMD TEST : ' + error.message);
+        trameTestEnCours = false;
+    }
+}
+
+// ============================================================
+//  TRAME SÉQUENTIELLE
+// ============================================================
+function handleSendClick() {
+    dernierEnvoi = 'sequence';
+    if (SequenceSendStatus) {
+        SequenceSendStatus.textContent = 'Envoi en cours...';
+        SequenceSendStatus.className   = 'status-bar warning';
+        SequenceSendStatus.classList.remove('hidden');
+    }
+    sendCommandSequenceRequest();
+}
+
+function sendCommandSequenceRequest() {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        showError('WebSocket non connecté');
+        return;
+    }
+    try {
+        var frame    = new ArrayBuffer(1020);
+        var view     = new Uint8Array(frame);
+        var dataView = new DataView(frame);
+        view.fill(0);
+
+        var offset = 0;
+
+        // Ident (4 chars)
+        var identification = (identificationInput ? identificationInput.value : '').padEnd(4, '\0').slice(0, 4);
+        for (var i = 0; i < 4; i++) { view[offset + i] = identification.charCodeAt(i); }
+        offset += 4;
+
+        // N° séquence (Int32 LE)
+        var numeroSeq = parseInt(numeroSequenceInput ? numeroSequenceInput.value : '0', 10) || 0;
+        dataView.setInt32(offset, numeroSeq, true); offset += 4;
+
+        // Heure (secondes depuis minuit)
+        var now = new Date(Date.now());
+        var secondsSinceMidnight = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+        dataView.setInt32(offset, secondsSinceMidnight, true); offset += 4;
+
+        // Cap
+        var cap = parseFloat(CapInput ? CapInput.value : '0') || 0;
+        dataView.setFloat32(offset, cap, true); offset += 4;
+
+        // Assiette
+        var assiette = parseFloat(AssietteInput ? AssietteInput.value : '0') || 0;
+        dataView.setFloat32(offset, assiette, true); offset += 4;
+
+        // Bande
+        var bande = parseFloat(BandeInput ? BandeInput.value : '0') || 0;
+        dataView.setFloat32(offset, bande, true); offset += 4;
+
+        // X
+        var x = parseFloat(abscisseInput ? abscisseInput.value : '0') || 0;
+        dataView.setFloat32(offset, x, true); offset += 4;
+
+        // Y
+        var y = parseFloat(ordonneeInput ? ordonneeInput.value : '0') || 0;
+        dataView.setFloat32(offset, y, true); offset += 4;
+
+        // Z
+        var z = parseFloat(zInput ? zInput.value : '0') || 0;
+        dataView.setFloat32(offset, z, true); offset += 4;
+
+        // Vitesse
+        var vitesse = parseFloat(VitesseInput ? VitesseInput.value : '0') || 0;
+        dataView.setFloat32(offset, vitesse, true); offset += 4;
+
+        // Réémission : actif (1 byte) + valeur ms (Float32)
+        var reemActive = reemissionActif ? 1 : 0;
+        view[offset] = reemActive; offset += 1;
+
+        var reemMs = reemissionActif ? (parseFloat(ReemissionInput ? ReemissionInput.value : '0') || 0) : 0;
+        dataView.setFloat32(offset, reemMs, true); offset += 4;
+
+        var checksum   = calculateChecksumFromBuffer(frame);
+        var finalFrame = new ArrayBuffer(1024);
+        var finalView  = new Uint8Array(finalFrame);
+        finalView.set(view, 0);
+        finalView.set(checksum, 1020);
+
+        socket.send(finalFrame);
+
+        if (SequenceSendStatus) {
+            SequenceSendStatus.textContent = 'Requête Séquence envoyée — en attente de réponse...';
+            SequenceSendStatus.className   = 'status-bar warning';
+            SequenceSendStatus.classList.remove('hidden');
+        }
+
+        var identClean = identification.split('').filter(function(c) { return c.charCodeAt(0) !== 0; }).join('');
+        addLog('SEND', 'CMD SEQ | ident=' + identClean + ' | seq=' + numeroSeq + ' | reem=' + (reemissionActif ? 'OUI ' + reemMs + 'ms' : 'NON'));
+
+        afficherDetailTrameSeq(finalView, checksum, {
+            identification: identification,
+            numeroSeq:      numeroSeq,
+            secondsSinceMidnight: secondsSinceMidnight,
+            cap:      cap,
+            assiette: assiette,
+            bande:    bande,
+            x:        x,
+            y:        y,
+            z:        z,
+            vitesse:  vitesse,
+            reemActive: reemActive,
+            reemMs:     reemMs
+        });
+
+    } catch (error) {
+        showError('Erreur envoi CMD SEQ : ' + error.message);
+        if (SequenceSendStatus) SequenceSendStatus.style.display = 'none';
+    }
+}
+
+// ============================================================
+//  RÉPONSE
+// ============================================================
+async function handleResponse(data) {
+    try {
+        var arrayBuffer;
+
+        if (data instanceof Blob) {
+            arrayBuffer = await data.arrayBuffer();
+        } else if (data instanceof ArrayBuffer) {
+            arrayBuffer = data;
+        } else {
+            // Texte brut
+            var text = String(data).trim();
+            addLog('RECV', text);
+            if (dernierEnvoi === 'test') {
+                if (sendStatus) {
+                    sendStatus.textContent = 'Réponse reçue : ' + text;
+                    sendStatus.className   = 'status-bar success';
+                    sendStatus.classList.remove('hidden');
+                }
+            } else if (dernierEnvoi === 'sequence') {
+                if (SequenceSendStatus) {
+                    SequenceSendStatus.textContent = 'Réponse reçue : ' + text;
+                    SequenceSendStatus.className   = 'status-bar success';
+                    SequenceSendStatus.classList.remove('hidden');
+                }
+            }
+            return;
+        }
+
+        var view = new Uint8Array(arrayBuffer);
+
+        // Vérifier taille
+        if (view.length !== 1024) {
+            showError('Taille incorrecte : ' + view.length + ' octets (attendu 1024)');
+            return;
+        }
+
+        // Séparer données / checksum
+        var dataOnly         = arrayBuffer.slice(0, 1020);
+        var receivedChecksum = view.slice(1020, 1024);
+
+        // Vérifier checksum
+        var calculatedChecksum = calculateChecksumFromBuffer(dataOnly);
+        var checksumValid = true;
+        for (var i = 0; i < 4; i++) {
+            if (receivedChecksum[i] !== calculatedChecksum[i]) {
+                checksumValid = false;
+                break;
+            }
+        }
+
+        if (!checksumValid) {
+            showError('Erreur de checksum dans la réponse');
+            return;
+        }
+
+        var dataViewArr   = new Uint8Array(dataOnly);
+        var dataViewTyped = new DataView(dataOnly);
+
+        // Router selon le dernier envoi
+        if (dernierEnvoi === 'test') {
+            handleCommandTestResponse(dataViewArr);
+        } else if (dernierEnvoi === 'sequence') {
+            handleCommandSequenceResponse(dataViewArr, dataViewTyped);
+        } else {
+            handleCommandTestResponse(dataViewArr);
+        }
+
+    } catch (error) {
+        showError('Erreur traitement réponse : ' + error.message);
+    }
+}
+
+function handleCommandTestResponse(view) {
+    var ident = decodeChars(view, 0, 4);
+
+    if (NumMsgField)        NumMsgField.value        = NumMsgTest ? NumMsgTest.value : '7';
+    if (identResponseField) identResponseField.value = ident;
+    if (resultatField)      resultatField.value       = 'OK';
+    if (detailField)        detailField.value         = bytesToHex(view.slice(0, 16));
+    if (NumSeqField)        NumSeqField.value         = '-';
+    if (memssdField)        memssdField.value         = '-';
+
+    if (NumMsgInfo)        NumMsgInfo.textContent        = 'Réponse CMD TEST';
+    if (identResponseInfo) identResponseInfo.textContent = 'Ident utilisé';
+    if (resultatInfo)      resultatInfo.textContent      = 'Retour backend/UDP';
+    if (detailInfo)        detailInfo.textContent        = 'Réponse brute';
+
+    if (sendStatus) {
+        sendStatus.textContent = 'Réponse Test reçue avec succès';
+        sendStatus.className   = 'status-bar success';
+        sendStatus.classList.remove('hidden');
+    }
+
+    addLog('RECV', 'Réponse TEST | ident=' + ident);
+}
+
+function handleCommandSequenceResponse(view, dataViewTyped) {
+    var ident  = decodeChars(view, 0, 4);
+    var numSeq = dataViewTyped ? dataViewTyped.getInt32(4, true) : 0;
+
+    if (NumMsgSeqField)        NumMsgSeqField.value        = NumeroMsgInput ? NumeroMsgInput.value : '';
+    if (identResponseSeqField) identResponseSeqField.value = ident;
+    if (NumSeqbField)          NumSeqbField.value          = numSeq;
+    if (memssdSeqField)        memssdSeqField.value        = bytesToHex(view.slice(0, 16));
+
+    if (NumMsgSeqInfo) NumMsgSeqInfo.textContent = 'Réponse CMD SEQ';
+    if (memssdSeqInfo) memssdSeqInfo.textContent = 'Réponse brute';
+
+    if (SequenceSendStatus) {
+        SequenceSendStatus.textContent = 'Réponse Séquentielle reçue avec succès';
+        SequenceSendStatus.className   = 'status-bar success';
+        SequenceSendStatus.classList.remove('hidden');
+    }
+
+    addLog('RECV', 'Réponse SEQ | ident=' + ident + ' | seq=' + numSeq);
+}
+
+// ============================================================
+//  CHECKSUM & UTILITAIRES
+// ============================================================
+function calculateChecksumFromBuffer(buffer) {
+    var bytes    = new Uint8Array(buffer);
+    var checksum = 0;
+    for (var i = 0; i < bytes.length; i++) {
+        checksum = (checksum + bytes[i]) >>> 0;
+    }
+    var out = new Uint8Array(4);
+    out[0] = (checksum >>> 24) & 0xff;
+    out[1] = (checksum >>> 16) & 0xff;
+    out[2] = (checksum >>>  8) & 0xff;
+    out[3] =  checksum         & 0xff;
+    return out;
+}
+
+function bytesToHex(bytes) {
+    return Array.from(bytes).map(function(b) { return b.toString(16).padStart(2, '0'); }).join(' ');
+}
+
+function decodeChars(view, offset, length) {
+    var str = '';
+    for (var i = 0; i < length; i++) {
+        var c = view[offset + i];
+        if (c !== 0) str += String.fromCharCode(c);
+    }
+    return str;
+}
+
+function formatHexDump(bytes) {
+    var cols  = 8;
+    var lines = [];
+    for (var i = 0; i < bytes.length; i += cols) {
+        var slice   = Array.from(bytes.slice(i, i + cols));
+        var hexPart = slice.map(function(b) { return b.toString(16).padStart(2, '0').toUpperCase(); }).join(' ');
+        var offset  = i.toString(16).padStart(4, '0').toUpperCase();
+        lines.push('[' + offset + '] ' + hexPart);
+    }
+    return lines.join('\n');
+}
+
+function setText(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+// ============================================================
+//  AFFICHAGE DÉTAIL TRAME TEST
+// ============================================================
+function afficherDetailTrameTest(finalView, checksum, ident) {
+    var section = document.getElementById('trameTestDetail');
+    if (!section) return;
+    section.style.display = 'block';
+
+    var sizeEl = document.getElementById('trameTestSize');
+    if (sizeEl) sizeEl.textContent = finalView.length + ' octets';
+
+    var crcHex = Array.from(checksum)
+        .map(function(b) { return b.toString(16).padStart(2, '0').toUpperCase(); })
+        .join(' ');
+
+    var crcEl = document.getElementById('trameTestChecksum');
+    if (crcEl) crcEl.textContent = 'CRC: ' + crcHex;
+
+    var now  = new Date(Date.now());
+    var time = now.toLocaleTimeString('fr-FR', { hour12: false });
+
+    var identClean = ident.split('').filter(function(c) { return c.charCodeAt(0) !== 0; }).join('');
+
+    setText('ti_ident',    identClean || '—');
+    setText('ti_numMsg',   NumMsgTest ? NumMsgTest.value : '7');
+    setText('ti_timestamp', time);
+    setText('ti_checksum', crcHex);
+
+    var hex32 = formatHexDump(finalView.slice(0, 32));
+    setText('ti_hex32', hex32);
+}
+
+// ============================================================
+//  AFFICHAGE DÉTAIL TRAME SÉQUENTIELLE
+// ============================================================
+function afficherDetailTrameSeq(finalView, checksum, params) {
+    var section = document.getElementById('trameSeqDetail');
+    if (!section) return;
+    section.style.display = 'block';
+
+    var sizeEl = document.getElementById('trameSeqSize');
+    if (sizeEl) sizeEl.textContent = finalView.length + ' octets';
+
+    var crcHex = Array.from(checksum)
+        .map(function(b) { return b.toString(16).padStart(2, '0').toUpperCase(); })
+        .join(' ');
+
+    var crcEl = document.getElementById('trameSeqChecksum');
+    if (crcEl) crcEl.textContent = 'CRC: ' + crcHex;
+
+    var identClean = params.identification.split('').filter(function(c) { return c.charCodeAt(0) !== 0; }).join('');
+    var reemActif  = params.reemActive === 1 || params.reemActive === true;
+    var reemVal    = (params.reemMs !== undefined && params.reemMs !== null) ? Number(params.reemMs).toFixed(2) : '0.00';
+
+    setText('ts_ident',      identClean || '—');
+    setText('ts_seq',        params.numeroSeq);
+    setText('ts_heure',      params.secondsSinceMidnight + ' s');
+    setText('ts_cap',        params.cap.toFixed(4));
+    setText('ts_assiette',   params.assiette.toFixed(4));
+    setText('ts_bande',      params.bande.toFixed(4));
+    setText('ts_x',          params.x.toFixed(4));
+    setText('ts_y',          params.y.toFixed(4));
+    setText('ts_z',          params.z.toFixed(4));
+    setText('ts_vitesse',    params.vitesse.toFixed(4));
+    setText('ts_reem_active', reemActif ? 'OUI' : 'NON');
+    setText('ts_reem_ms',    reemActif ? reemVal + ' ms' : '—');
+    setText('ts_checksum',   crcHex);
+
+    var hex48 = formatHexDump(finalView.slice(0, 48));
+    setText('ts_hex48', hex48);
+}
+
+// ============================================================
+//  EXPORT LOGS
+// ============================================================
+function exportLogs() {
+    var lv = document.getElementById('logViewer');
+    if (!lv || !lv.value.trim()) {
+        addLog('SYSTEM', 'Aucun log à exporter');
+        return;
+    }
+
+    var d        = new Date(Date.now());
+    var date     = d.toLocaleDateString('fr-FR');
+    var heure    = d.toLocaleTimeString('fr-FR');
+    var ip       = ipInput   ? ipInput.value.trim()   : '—';
+    var port     = PortInput ? PortInput.value.trim()  : '—';
+
+    var header = [
+        '================================================',
+        '  OUTIL DE TÊTE ACOUSTIQUE — Export des trames',
+        '================================================',
+        'Date       : ' + date,
+        'Heure      : ' + heure,
+        'Serveur    : ' + ip + ':' + port,
+        'Connexion  : ' + (isConnected ? 'Connecté' : 'Déconnecté'),
+        '================================================',
+        '',
+        lv.value.trim(),
+        '',
+        '================================================',
+        'Fin du rapport — ' + date + ' ' + heure,
+        '================================================'
+    ].join('\n');
+
+    var blob     = new Blob([header], { type: 'text/plain;charset=utf-8' });
+    var url      = URL.createObjectURL(blob);
+    var a        = document.createElement('a');
+    var fileName = 'trame_acoustique_'
+                 + d.getFullYear()
+                 + String(d.getMonth() + 1).padStart(2, '0')
+                 + String(d.getDate()).padStart(2, '0')
+                 + '_'
+                 + String(d.getHours()).padStart(2, '0')
+                 + String(d.getMinutes()).padStart(2, '0')
+                 + String(d.getSeconds()).padStart(2, '0')
+                 + '.txt';
+
+    a.href     = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    addLog('SYSTEM', 'Export → ' + fileName);
+}
+
+// ============================================================
+//  UI — setWsState
+// ============================================================
+function setWsState(state) {
+    var cfg = {
+        disconnected: { cls: '',           label: 'Déconnecté',  connected: false },
+        connecting:   { cls: 'connecting', label: 'Connexion…',  connected: false },
+        connected:    { cls: 'connected',  label: 'Connecté',    connected: true  },
+        error:        { cls: '',           label: 'Erreur',       connected: false }
+    };
+    var s = cfg[state] || cfg.disconnected;
+    isConnected = s.connected;
+
+    var wsBadge = document.getElementById('wsBadge');
+    var wsLabel = document.getElementById('wsLabel');
+    var chip    = document.getElementById('globalConnectionChip');
+    var navDot  = document.querySelector('#navConnStatus .dot');
+    var navLbl  = document.getElementById('navConnLabel');
+
+    if (wsBadge) wsBadge.className = 'ws-status-badge' + (s.cls ? ' ' + s.cls : '');
+    if (wsLabel) wsLabel.textContent = s.label;
+
+    if (chip) {
+        chip.className = 'chip ' + (s.connected ? 'connected' : 'disconnected');
+        chip.innerHTML = '<span class="chip-dot"></span>' + s.label;
+    }
+
+    if (navDot) navDot.className = 'dot ' + (s.connected ? 'connected' : 'disconnected');
+    if (navLbl) navLbl.textContent = s.label;
+
+    var infoIp   = document.getElementById('connexion-info-ip');
+    var infoPort = document.getElementById('connexion-info-port');
+    var statusEl = document.getElementById('connectionStatus');
+
+    if (s.connected) {
+        if (infoIp)   infoIp.textContent   = ipInput   ? ipInput.value.trim()   : '—';
+        if (infoPort) infoPort.textContent = PortInput ? PortInput.value.trim()  : '—';
+        if (statusEl) { statusEl.textContent = 'Connecté';   statusEl.style.color = 'var(--green)'; }
+    } else {
+        if (infoIp)   infoIp.textContent   = '—';
+        if (infoPort) infoPort.textContent = '—';
+        if (statusEl) {
+            statusEl.textContent = state === 'connecting' ? 'Connexion en cours…' : 'Déconnecté';
+            statusEl.style.color = state === 'connecting' ? 'var(--orange)' : 'var(--red)';
+        }
+    }
+
+    if (connectBtn)    connectBtn.disabled    = s.connected || state === 'connecting';
+    if (disconnectBtn) disconnectBtn.disabled = !s.connected;
+
+    // Bouton Test : réactiver à la connexion, reset au déconnect
+    if (state === 'connected') {
+        trameTestEnCours = false;
+        if (testBtn) {
+            testBtn.disabled      = false;
+            testBtn.innerHTML     = '<span class="btn-icon">◈</span> Send CMD Test';
+            testBtn.style.opacity = '1';
+            testBtn.title         = '';
+        }
+    }
+
+    if (state === 'disconnected' || state === 'error') {
+        if (testBtn) {
+            testBtn.disabled      = true;
+            testBtn.innerHTML     = '<span class="btn-icon">◈</span> Send CMD Test';
+            testBtn.style.opacity = '1';
+            testBtn.title         = '';
+        }
+    }
+
+    if (sendBtn) sendBtn.disabled = !s.connected;
+}
+
+function setConnectedUI(connected) {
+    setWsState(connected ? 'connected' : 'disconnected');
+}
+
+// ============================================================
+//  LOGS
+// ============================================================
+function addLog(type, message) {
+    var logViewer = document.getElementById('logViewer');
+    if (!logViewer) return;
+
+    var now  = new Date(Date.now());
+    var time = now.toLocaleTimeString('fr-FR', { hour12: false });
+    var line = '[' + time + '] [' + type + '] ' + message + '\n';
+
+    logViewer.value += line;
+    logViewer.scrollTop = logViewer.scrollHeight;
+
+    var totalBytes = new Blob([logViewer.value]).size;
+    updateLogMeta(time, totalBytes + ' octets', '----');
+
+    // Sync vers les autres viewers
+    ['logViewer_t', 'logViewer2'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) { el.value = logViewer.value; el.scrollTop = el.scrollHeight; }
+    });
+}
+
+function updateLogMeta(time, size, checksum) {
+    var text = time + ' | ' + size + ' | ' + checksum;
+    ['logMeta', 'logMeta_t', 'logMeta2'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = text;
+    });
+}
+
+function showError(message) {
+    if (errorMessage) {
+        errorMessage.textContent = message;
+        errorMessage.className   = 'status-bar error';
+        errorMessage.classList.remove('hidden');
+    }
+    addLog('ERROR', message);
+}
+
+function clearError() {
+    if (errorMessage) {
+        errorMessage.textContent = '';
+        errorMessage.className   = 'status-bar error hidden';
+    }
+}
