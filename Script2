@@ -1,0 +1,251 @@
+// ============================================================
+// CONFIG
+// ============================================================
+
+let socket = null;
+let lastCommand = null; // 'test' | 'seq'
+
+// ============================================================
+// CONNEXION
+// ============================================================
+
+function connect(ip, port) {
+    socket = new WebSocket(`ws://${ip}:${port}`);
+
+    socket.onopen = () => {
+        console.log("WS connecté");
+    };
+
+    socket.onclose = () => {
+        console.log("WS fermé");
+    };
+
+    socket.onerror = (e) => {
+        console.error("WS erreur", e);
+    };
+
+    socket.onmessage = (event) => {
+        handleResponse(event.data);
+    };
+}
+
+// ============================================================
+// ENVOI TEST
+// ============================================================
+
+function sendTest() {
+    lastCommand = 'test';
+
+    const buffer = new ArrayBuffer(1024);
+    const view = new Uint8Array(buffer);
+    const dv = new DataView(buffer);
+
+    view.fill(0);
+
+    const ident = document.getElementById('ident').value.padEnd(4, '\0');
+
+    for (let i = 0; i < 4; i++) {
+        view[i] = ident.charCodeAt(i);
+    }
+
+    dv.setUint32(4, 7, true);
+
+    const checksum = calcChecksum(view.slice(0, 1020));
+    view.set(checksum, 1020);
+
+    socket.send(buffer);
+
+    setStatus("Test envoyé...");
+}
+
+// ============================================================
+// ENVOI SEQ
+// ============================================================
+
+function sendSeq() {
+    lastCommand = 'seq';
+
+    const buffer = new ArrayBuffer(1024);
+    const view = new Uint8Array(buffer);
+    const dv = new DataView(buffer);
+
+    view.fill(0);
+
+    let offset = 0;
+
+    const ident = document.getElementById('identification').value.padEnd(4, '\0');
+
+    for (let i = 0; i < 4; i++) {
+        view[offset + i] = ident.charCodeAt(i);
+    }
+    offset += 4;
+
+    dv.setInt32(offset, parseInt(document.getElementById('numeroSequence').value), true);
+    offset += 4;
+
+    const now = new Date();
+    const seconds = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+    dv.setInt32(offset, seconds, true);
+    offset += 4;
+
+    dv.setFloat32(offset, parseFloat(document.getElementById('Cap').value), true);
+    offset += 4;
+
+    dv.setFloat32(offset, parseFloat(document.getElementById('Assiette').value), true);
+    offset += 4;
+
+    dv.setFloat32(offset, parseFloat(document.getElementById('Bande').value), true);
+    offset += 4;
+
+    dv.setFloat32(offset, parseFloat(document.getElementById('abscisse').value), true);
+    offset += 4;
+
+    dv.setFloat32(offset, parseFloat(document.getElementById('ordonnee').value), true);
+    offset += 4;
+
+    dv.setFloat32(offset, parseFloat(document.getElementById('z').value), true);
+    offset += 4;
+
+    dv.setFloat32(offset, parseFloat(document.getElementById('Vitesse').value), true);
+    offset += 4;
+
+    const reem = document.getElementById('reemissionOui').classList.contains('active') ? 1 : 0;
+    view[offset] = reem;
+    offset += 1;
+
+    const reemMs = reem ? parseFloat(document.getElementById('temps').value) : 0;
+    dv.setFloat32(offset, reemMs, true);
+    offset += 4;
+
+    const checksum = calcChecksum(view.slice(0, 1020));
+    view.set(checksum, 1020);
+
+    socket.send(buffer);
+
+    setStatus("Séquence envoyée...");
+}
+
+// ============================================================
+// RÉCEPTION
+// ============================================================
+
+async function handleResponse(data) {
+    try {
+
+        // CAS TEXTE
+        if (typeof data === 'string') {
+            console.log("RECV TEXT:", data);
+
+            if (lastCommand === 'test') {
+                handleTestResponse(data);
+            } else {
+                handleSeqResponse(data);
+            }
+            return;
+        }
+
+        // CAS BINAIRE
+        let buffer;
+
+        if (data instanceof Blob) {
+            buffer = await data.arrayBuffer();
+        } else {
+            buffer = data;
+        }
+
+        const view = new Uint8Array(buffer);
+        const dv = new DataView(buffer);
+
+        console.log("RECV BIN:", view);
+
+        if (lastCommand === 'test') {
+            handleTestResponse(view);
+        } else {
+            handleSeqResponse(view, dv);
+        }
+
+    } catch (e) {
+        console.error("Erreur réception:", e);
+    }
+}
+
+// ============================================================
+// TRAITEMENT TEST
+// ============================================================
+
+function handleTestResponse(resp) {
+
+    if (typeof resp === 'string') {
+        setStatus("OK: " + resp);
+        return;
+    }
+
+    const ident = decode(resp, 0, 4);
+
+    document.getElementById('NumMsg').value = "7";
+    document.getElementById('identResponse').value = ident;
+    document.getElementById('resultat').value = "OK";
+    document.getElementById('detail').value = bytesToHex(resp.slice(0, 16));
+
+    setStatus("Réponse TEST OK");
+}
+
+// ============================================================
+// TRAITEMENT SEQ
+// ============================================================
+
+function handleSeqResponse(resp, dv) {
+
+    if (typeof resp === 'string') {
+        setStatus("OK: " + resp);
+        return;
+    }
+
+    const ident = decode(resp, 0, 4);
+    const seq = dv.getInt32(4, true);
+
+    document.getElementById('NumMsgSeq').value = "";
+    document.getElementById('identResponseSeq').value = ident;
+    document.getElementById('NumSeqb').value = seq;
+    document.getElementById('memssdSeq').value = bytesToHex(resp.slice(0, 16));
+
+    setStatus("Réponse SEQ OK");
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+
+function calcChecksum(bytes) {
+    let sum = 0;
+    for (let b of bytes) sum = (sum + b) >>> 0;
+
+    const out = new Uint8Array(4);
+    new DataView(out.buffer).setUint32(0, sum, true);
+    return out;
+}
+
+function decode(view, offset, len) {
+    let s = '';
+    for (let i = 0; i < len; i++) {
+        if (view[offset+i] !== 0)
+            s += String.fromCharCode(view[offset+i]);
+    }
+    return s;
+}
+
+function bytesToHex(bytes) {
+    return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2,'0').toUpperCase())
+        .join(' ');
+}
+
+function setStatus(msg) {
+    const el = document.getElementById('SequenceSendStatus') 
+        || document.getElementById('sendStatus');
+
+    if (el) {
+        el.textContent = msg;
+        el.className = "status-bar success";
+    }
+}
