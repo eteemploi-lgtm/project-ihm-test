@@ -1,0 +1,71 @@
+// nav.js — Navigation entre vues
+(function() {
+
+    var views = {
+        overview: { title: 'Vue générale',       sub: 'Connexion WebSocket · Supervision en temps réel' },
+        test:     { title: 'Trame Test',          sub: 'Commande Test 1020 octets · Logs en temps réel' },
+        sequence: { title: 'Trame Séquentielle',  sub: 'Commande Séquentielle 1020 octets · 9 paramètres' },
+        resume:   { title: 'Résumé',              sub: 'Récapitulatif des dernières réponses serveur' }
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+
+        // Clics sur les items du menu
+        document.querySelectorAll('.nav-item[data-view]').forEach(function(item) {
+            item.addEventListener('click', function() {
+                switchView(item.dataset.view);
+            });
+        });
+
+        // Boutons d'accès rapide
+        document.querySelectorAll('.quick-btn[data-nav]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                switchView(btn.dataset.nav);
+            });
+        });
+    });
+
+    function switchView(key) {
+        if (!views[key]) return;
+
+        // Nav items
+        document.querySelectorAll('.nav-item[data-view]').forEach(function(i) {
+            i.classList.toggle('active', i.dataset.view === key);
+        });
+
+        // Vues
+        document.querySelectorAll('.view').forEach(function(v) {
+            v.classList.toggle('active', v.id === 'view-' + key);
+        });
+
+        // Titre topbar
+        var titleEl = document.getElementById('pageTitle');
+        var subEl   = document.getElementById('pageSub');
+        if (titleEl) titleEl.textContent = views[key].title;
+        if (subEl)   subEl.textContent   = views[key].sub;
+
+        // Sync résumé
+        if (key === 'resume') syncResume();
+    }
+
+    function syncResume() {
+        var map = {
+            r_NumMsg:           'NumMsg',
+            r_identResponse:    'identResponse',
+            r_resultat:         'resultat',
+            r_detail:           'detail',
+            r_NumSeq:           'NumSeq',
+            r_memssd:           'memssd',
+            r_NumMsgSeq:        'NumMsgSeq',
+            r_identResponseSeq: 'identResponseSeq',
+            r_NumSeqb:          'NumSeqb',
+            r_memssdSeq:        'memssdSeq'
+        };
+        for (var dst in map) {
+            var src = document.getElementById(map[dst]);
+            var d   = document.getElementById(dst);
+            if (src && d) d.textContent = src.value || '—';
+        }
+    }
+
+})();
