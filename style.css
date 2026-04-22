@@ -2908,3 +2908,46 @@ html, body {
   min-width: 0;
   display: block;
 }
+
+/* ════════════════════════════════════════
+   SÉQUENCE — boutons action spéciaux ON/OFF
+════════════════════════════════════════ */
+.seq-action-btn {
+  padding: 5px 18px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.seq-action-on {
+  border: 1px solid rgba(24,217,122,0.5);
+  background: rgba(24,217,122,0.12);
+  color: var(--green);
+}
+.seq-action-on:hover {
+  background: rgba(24,217,122,0.25);
+  border-color: rgba(24,217,122,0.8);
+}
+.seq-action-on.active {
+  background: rgba(24,217,122,0.35);
+  box-shadow: 0 0 0 2px rgba(24,217,122,0.4);
+}
+
+.seq-action-off {
+  border: 1px solid rgba(240,78,104,0.5);
+  background: rgba(240,78,104,0.10);
+  color: var(--red);
+}
+.seq-action-off:hover {
+  background: rgba(240,78,104,0.22);
+  border-color: rgba(240,78,104,0.8);
+}
+.seq-action-off.active {
+  background: rgba(240,78,104,0.30);
+  box-shadow: 0 0 0 2px rgba(240,78,104,0.4);
+}
