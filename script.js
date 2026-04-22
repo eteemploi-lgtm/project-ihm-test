@@ -289,7 +289,9 @@ document.addEventListener("DOMContentLoaded", () => {
   ════════════════════════════════ */
   function IHMChart(canvas, cfg) {
     if (!canvas) return null;
-    const PAD = { top:28, right:20, bottom:44, left:52 };
+    // axisRight = index de la 1ère série sur l'axe droit (température)
+    const AXIS_RIGHT_START = cfg.axisRightStart ?? null;
+    const PAD = { top:28, right: AXIS_RIGHT_START !== null ? 56 : 20, bottom:44, left:52 };
     const MAX_PTS = cfg.maxPoints || 12;
     const series  = cfg.series.map(s => ({ label:s.label, color:s.color, fill:s.fill!==false, data:[...(s.data||[])], hidden:false }));
     let   labels  = [...(cfg.labels||[])];
@@ -301,10 +303,10 @@ document.addEventListener("DOMContentLoaded", () => {
     canvas.addEventListener("mouseleave", () => { tooltip=null; draw(); });
 
     function onMove(e) {
-      const rect = canvas.getBoundingClientRect();
-      const mx   = e.clientX - rect.left;
+      const rect  = canvas.getBoundingClientRect();
+      const mx    = e.clientX - rect.left;
       const plotW = (canvas.clientWidth||400) - PAD.left - PAD.right;
-      const n = labels.length;
+      const n     = labels.length;
       if (n < 2) return;
       let best=0, bestDx=Infinity;
       for (let i=0;i<n;i++) {
@@ -329,23 +331,52 @@ document.addEventListener("DOMContentLoaded", () => {
       const n     = labels.length;
       if (n===0) return;
 
-      let yMin=Infinity, yMax=-Infinity;
-      series.forEach(s => { if(s.hidden) return; s.data.forEach(v => { if(v<yMin)yMin=v; if(v>yMax)yMax=v; }); });
-      if (yMin===Infinity) { yMin=0; yMax=100; }
-      const range = yMax-yMin || 1;
-      yMin -= range*0.12; yMax += range*0.12;
+      // ── Axe gauche : séries 0..AXIS_RIGHT_START-1
+      // ── Axe droit  : séries AXIS_RIGHT_START..fin
+      const hasRight = AXIS_RIGHT_START !== null;
+      const leftSeries  = hasRight ? series.slice(0, AXIS_RIGHT_START) : series;
+      const rightSeries = hasRight ? series.slice(AXIS_RIGHT_START)     : [];
 
-      const xAt = i => PAD.left + (n>1 ? i/(n-1) : 0.5)*plotW;
-      const yAt = v => PAD.top  + (1-(v-yMin)/(yMax-yMin))*plotH;
+      function calcRange(sArr) {
+        let mn=Infinity, mx=-Infinity;
+        sArr.forEach(s => { if(s.hidden) return; s.data.forEach(v => { if(v<mn)mn=v; if(v>mx)mx=v; }); });
+        if (mn===Infinity) { mn=0; mx=100; }
+        const r=mx-mn||1; return [mn-r*0.12, mx+r*0.12];
+      }
+      const [lMin,lMax] = calcRange(leftSeries);
+      const [rMin,rMax] = hasRight ? calcRange(rightSeries) : [0,100];
 
+      const xAt   = i  => PAD.left + (n>1 ? i/(n-1) : 0.5)*plotW;
+      const yAtL  = v  => PAD.top  + (1-(v-lMin)/(lMax-lMin))*plotH;
+      const yAtR  = v  => PAD.top  + (1-(v-rMin)/(rMax-rMin))*plotH;
+      const yAtFor = (s) => hasRight && series.indexOf(s) >= AXIS_RIGHT_START ? yAtR : yAtL;
+
+      // Grille horizontale (axe gauche)
       for (let t=0;t<=5;t++) {
-        const gy = yAt(yMin+(yMax-yMin)*(t/5));
+        const gy = yAtL(lMin+(lMax-lMin)*(t/5));
         ctx.strokeStyle="rgba(42,140,255,0.07)"; ctx.lineWidth=1;
         ctx.beginPath(); ctx.moveTo(PAD.left,gy); ctx.lineTo(PAD.left+plotW,gy); ctx.stroke();
         ctx.fillStyle="#4a6580"; ctx.font="11px Segoe UI,sans-serif"; ctx.textAlign="right";
-        ctx.fillText(Math.round(yMin+(yMax-yMin)*(t/5)), PAD.left-6, gy+4);
+        ctx.fillText(Math.round(lMin+(lMax-lMin)*(t/5)), PAD.left-5, gy+4);
       }
 
+      // Axe Y droit — graduations températures
+      if (hasRight) {
+        for (let t=0;t<=5;t++) {
+          const gy = yAtR(rMin+(rMax-rMin)*(t/5));
+          ctx.fillStyle="#f5a623"; ctx.font="10px Segoe UI,sans-serif"; ctx.textAlign="left";
+          ctx.fillText(Math.round(rMin+(rMax-rMin)*(t/5))+"°", PAD.left+plotW+5, gy+4);
+        }
+        // Ligne axe droit
+        ctx.strokeStyle="rgba(245,166,35,0.25)"; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(PAD.left+plotW,PAD.top); ctx.lineTo(PAD.left+plotW,PAD.top+plotH); ctx.stroke();
+        // Label axe droit
+        ctx.save(); ctx.translate(W-10,PAD.top+plotH/2); ctx.rotate(-Math.PI/2);
+        ctx.fillStyle="rgba(245,166,35,0.6)"; ctx.font="10px Segoe UI,sans-serif"; ctx.textAlign="center";
+        ctx.fillText("°C", 0, 0); ctx.restore();
+      }
+
+      // Grille verticale + labels X
       const showEvery = Math.max(1,Math.ceil(n/8));
       for (let i=0;i<n;i++) {
         const gx = xAt(i);
@@ -357,12 +388,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+      // Axes principaux
       ctx.strokeStyle="rgba(42,140,255,0.15)"; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(PAD.left,PAD.top); ctx.lineTo(PAD.left,PAD.top+plotH); ctx.lineTo(PAD.left+plotW,PAD.top+plotH); ctx.stroke();
 
+      // Courbes
       series.forEach(s => {
         if (s.hidden || s.data.length<1) return;
-        const pts = s.data.map((v,i) => [xAt(i),yAt(v)]);
+        const yFn = yAtFor(s);
+        const pts  = s.data.map((v,i) => [xAt(i), yFn(v)]);
         if (s.fill) {
           ctx.beginPath();
           ctx.moveTo(pts[0][0], PAD.top+plotH);
@@ -387,7 +421,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       });
 
-      // légende
+      // Légende
       let lx = PAD.left;
       series.forEach(s => {
         ctx.globalAlpha = s.hidden ? 0.3 : 1;
@@ -398,7 +432,7 @@ document.addEventListener("DOMContentLoaded", () => {
         lx += ctx.measureText(s.label).width+36;
       });
 
-      // tooltip
+      // Tooltip
       if (tooltip!==null && tooltip.idx<n) {
         const i=tooltip.idx, gx=xAt(i);
         ctx.strokeStyle="rgba(42,140,255,0.3)"; ctx.lineWidth=1;
@@ -406,7 +440,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.beginPath(); ctx.moveTo(gx,PAD.top); ctx.lineTo(gx,PAD.top+plotH); ctx.stroke();
         ctx.setLineDash([]);
         ctx.font="11px Segoe UI,sans-serif";
-        const lines = series.filter(s=>!s.hidden).map(s=>`${s.label}: ${s.data[i]!==undefined?Math.round(s.data[i]*100)/100:"–"}`);
+        const vis   = series.filter(s=>!s.hidden);
+        const lines = vis.map(s=>`${s.label}: ${s.data[i]!==undefined?Math.round(s.data[i]*100)/100:"–"}`);
         const bw=Math.max(...lines.map(l=>ctx.measureText(l).width+24),100);
         const bh=lines.length*18+22;
         let bx=gx+10, by=PAD.top;
@@ -415,10 +450,11 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,6); ctx.fill(); ctx.stroke();
         ctx.fillStyle="#9aa7b8"; ctx.textAlign="left";
         ctx.fillText(labels[i]||`T${i}`, bx+10, by+14);
-        series.filter(s=>!s.hidden).forEach((s,li)=>{ ctx.fillStyle=s.color; ctx.fillText(lines[li],bx+10,by+28+li*17); });
-        series.filter(s=>!s.hidden).forEach(s=>{
+        vis.forEach((s,li)=>{ ctx.fillStyle=s.color; ctx.fillText(lines[li],bx+10,by+28+li*17); });
+        vis.forEach(s=>{
           if(s.data[i]===undefined)return;
-          ctx.beginPath(); ctx.arc(gx,yAt(s.data[i]),5,0,Math.PI*2);
+          const yFn=yAtFor(s);
+          ctx.beginPath(); ctx.arc(gx,yFn(s.data[i]),5,0,Math.PI*2);
           ctx.fillStyle=s.color; ctx.fill();
           ctx.strokeStyle="#fff"; ctx.lineWidth=1.5; ctx.stroke();
         });
@@ -459,8 +495,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const motorChart = IHMChart(motorChartCanvas, {
     maxPoints:20, labels:[],
+    axisRightStart: 1,
     series:[
-      { label:"RPM actuel",    color:"#2a8cff", data:[], fill:true },
+      { label:"RPM actuel",    color:"#2a8cff", data:[], fill:true  },
+      { label:"T°Moteur (°C)", color:"#e84393", data:[], fill:false },
       { label:"T°Smo1 (°C)",   color:"#f5a623", data:[], fill:false },
       { label:"T°Smo2 (°C)",   color:"#ff6b6b", data:[], fill:false },
       { label:"T°Smo3 (°C)",   color:"#a78bfa", data:[], fill:false },
@@ -471,7 +509,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function pushMotorChart(rpm, temp, t1, t2, t3, tP) {
     if (!motorChart) return;
     const now = new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-    motorChart.push(now, [rpm??0, t1??temp??0, t2??temp??0, t3??temp??0, tP??temp??0]);
+    motorChart.push(now, [rpm??0, temp??0, t1??temp??0, t2??temp??0, t3??temp??0, tP??temp??0]);
   }
 
   /* ════════════════════════════════
@@ -725,6 +763,14 @@ document.addEventListener("DOMContentLoaded", () => {
       colorEl(sensorEls.pression.retour, stPres);
     }
     if (dashLedPression) dashLedPression.dataset.state = stPres;
+    // Calcul immersion : h = P / (ρ × g) avec P en Pa, ρ=1000 kg/m³, g=9.81 m/s²
+    // rawPres est en bar → 1 bar = 100 000 Pa
+    const immersionM = (rawPres * 100000) / (1000 * 9.81);
+    const retourImm = $("retourImmersion");
+    if (retourImm) {
+      retourImm.textContent = immersionM.toFixed(2) + " m";
+      colorEl(retourImm, stPres);
+    }
 
     // ── Températures moteur (4 sondes) ──
     // TempSmo1/2/3 : max=70°C, orange à 85% (59.5°C)
@@ -1056,23 +1102,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn  = $("seqBtn" + i);
     const led  = $("seqLed" + i);
     const item = btn?.closest(".seq-item");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        seqState[i] = !seqState[i];
-        if (seqState[i]) {
-          btn.textContent = "✓ OK";
-          btn.classList.add("validated");
-          if (led)  led.dataset.state = "ok";
-          if (item) item.classList.add("seq-done");
-        } else {
-          btn.textContent = "Valider";
-          btn.classList.remove("validated");
-          if (led)  led.dataset.state = "unknown";
-          if (item) item.classList.remove("seq-done");
-        }
-        updateSeqBadge();
-      });
-    }
+    if (!btn) continue;
+
+    // Boutons spéciaux KAPa ON (6) et KAPa OFF (8)
+    const isKapaOn  = i === 6;
+    const isKapaOff = i === 8;
+    const origLabel = isKapaOn ? "ON" : isKapaOff ? "OFF" : "Valider";
+
+    btn.addEventListener("click", () => {
+      seqState[i] = !seqState[i];
+      if (seqState[i]) {
+        btn.textContent = "✓ " + origLabel;
+        btn.classList.add("validated");
+        if (led)  led.dataset.state = "ok";
+        if (item) item.classList.add("seq-done");
+        addLog(isKapaOn ? "KAPa → ON activé" : isKapaOff ? "KAPa → OFF activé" : "Séq " + i + " validée", "info");
+      } else {
+        btn.textContent = origLabel;
+        btn.classList.remove("validated");
+        if (led)  led.dataset.state = "unknown";
+        if (item) item.classList.remove("seq-done");
+      }
+      updateSeqBadge();
+    });
   }
 
   function updateSeqBadge() {
@@ -1356,6 +1408,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mainChart) mainChart.push(now,[simMotor.rpm_actual, simMotor.temperature]);
     if (motorChart) motorChart.push(now,[
       simMotor.rpm_actual,
+      simMotor.temperature,
       simSensors.temperature, simSensors.temperature+1, simSensors.temperature-1,
       simMotor.temperature
     ]);
