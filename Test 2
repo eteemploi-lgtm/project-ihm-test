@@ -1,0 +1,1140 @@
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
+
+#include <stdint.h>
+
+#define FRAME_SIZE 1024
+#define FRAME_DATA_SIZE 1020
+#define CHECKSUM_OFFSET 1020
+
+#define IDENT_TEST "TEST"
+#define IDENT_SEQ  "SEQU"
+#define IDENT_ACKT "ACKT"
+#define IDENT_ACKS "ACKS"
+#define IDENT_ERR  "ERR!"
+
+#pragma pack(push, 1)
+
+typedef struct
+{
+    char ident[4];          // 0..3
+    uint32_t numMsg;        // 4..7
+    uint8_t payload[1012];  // 8..1019
+    uint32_t checksum;      // 1020..1023
+} stFrameRaw;
+
+// Réponse TEST
+typedef struct
+{
+    char ident[4];          // ACKT
+    uint32_t numMsg;
+    int32_t resultCode;     // 0 = OK
+    int32_t detailCode;     // libre
+    int32_t numSeq;         // libre
+    int32_t memSsd;         // libre
+    uint8_t reserved[996];
+    uint32_t checksum;
+} stAckTest;
+
+// Réponse SEQ
+typedef struct
+{
+    char ident[4];          // ACKS
+    uint32_t numMsg;
+    int32_t numSeq;
+    int32_t memSsd;
+    uint8_t reserved[1004];
+    uint32_t checksum;
+} stAckSeq;
+
+// Payload attendu côté JS pour SEQ
+typedef struct
+{
+    char ident[4];              // 0..3
+    int32_t numeroSeq;          // 4..7
+    int32_t secondsSinceMidnight; // 8..11
+    float cap;                  // 12..15
+    float assiette;             // 16..19
+    float bande;                // 20..23
+    float x;                    // 24..27
+    float y;                    // 28..31
+    float z;                    // 32..35
+    float vitesse;              // 36..39
+    uint8_t reemissionActive;   // 40
+    float reemissionMs;         // 41..44
+    uint8_t reserved[975];      // 45..1019
+    uint32_t checksum;          // 1020..1023
+} stSeqFrame;
+
+#pragma pack(pop)
+
+uint32_t calc_checksum_1020(const uint8_t *data, uint32_t len);
+int verify_frame_checksum(const uint8_t *frame1024);
+
+#endif
+
+
+#include "protocol.h"
+
+uint32_t calc_checksum_1020(const uint8_t *data, uint32_t len)
+{
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < len; ++i)
+    {
+        sum = (sum + data[i]) & 0xFFFFFFFFu;
+    }
+    return sum;
+}
+
+static uint32_t read_le_u32(const uint8_t *p)
+{
+    return ((uint32_t)p[0]) |
+           ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
+int verify_frame_checksum(const uint8_t *frame1024)
+{
+    uint32_t calc = calc_checksum_1020(frame1024, FRAME_DATA_SIZE);
+    uint32_t recv = read_le_u32(frame1024 + CHECKSUM_OFFSET);
+    return calc == recv;
+}
+
+
+#ifndef UDP_CONNECTION_H
+#define UDP_CONNECTION_H
+
+#include <stdint.h>
+#include <netinet/in.h>
+
+typedef struct
+{
+    int sockfd;
+    struct sockaddr_in localAddr;
+    struct sockaddr_in remoteAddr;
+} stUdpConnection;
+
+int UdpInit(stUdpConnection *ctx,
+            const char *localIp,
+            uint16_t localPort,
+            const char *remoteIp,
+            uint16_t remotePort);
+
+int UdpRecv(stUdpConnection *ctx,
+            uint8_t *buffer,
+            uint32_t bufferSize,
+            uint32_t *receivedSize,
+            struct sockaddr_in *srcAddr);
+
+int UdpSendTo(stUdpConnection *ctx,
+              const uint8_t *buffer,
+              uint32_t bufferSize,
+              const struct sockaddr_in *dstAddr);
+
+void UdpClose(stUdpConnection *ctx);
+
+#endif
+
+
+
+#include "udp_connection.h"
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+int UdpInit(stUdpConnection *ctx,
+            const char *localIp,
+            uint16_t localPort,
+            const char *remoteIp,
+            uint16_t remotePort)
+{
+    if (!ctx) return -1;
+
+    memset(ctx, 0, sizeof(*ctx));
+
+    ctx->sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (ctx->sockfd < 0)
+    {
+        perror("socket");
+        return -1;
+    }
+
+    ctx->localAddr.sin_family = AF_INET;
+    ctx->localAddr.sin_port = htons(localPort);
+    if (inet_pton(AF_INET, localIp, &ctx->localAddr.sin_addr) != 1)
+    {
+        perror("inet_pton local");
+        close(ctx->sockfd);
+        return -1;
+    }
+
+    if (bind(ctx->sockfd, (struct sockaddr *)&ctx->localAddr, sizeof(ctx->localAddr)) < 0)
+    {
+        perror("bind");
+        close(ctx->sockfd);
+        return -1;
+    }
+
+    ctx->remoteAddr.sin_family = AF_INET;
+    ctx->remoteAddr.sin_port = htons(remotePort);
+    if (inet_pton(AF_INET, remoteIp, &ctx->remoteAddr.sin_addr) != 1)
+    {
+        perror("inet_pton remote");
+        close(ctx->sockfd);
+        return -1;
+    }
+
+    return 0;
+}
+
+int UdpRecv(stUdpConnection *ctx,
+            uint8_t *buffer,
+            uint32_t bufferSize,
+            uint32_t *receivedSize,
+            struct sockaddr_in *srcAddr)
+{
+    if (!ctx || !buffer || !receivedSize || !srcAddr) return -1;
+
+    socklen_t srcLen = sizeof(*srcAddr);
+    int n = recvfrom(ctx->sockfd,
+                     buffer,
+                     bufferSize,
+                     0,
+                     (struct sockaddr *)srcAddr,
+                     &srcLen);
+    if (n < 0)
+    {
+        perror("recvfrom");
+        return -1;
+    }
+
+    *receivedSize = (uint32_t)n;
+    return 0;
+}
+
+int UdpSendTo(stUdpConnection *ctx,
+              const uint8_t *buffer,
+              uint32_t bufferSize,
+              const struct sockaddr_in *dstAddr)
+{
+    if (!ctx || !buffer || !dstAddr) return -1;
+
+    int n = sendto(ctx->sockfd,
+                   buffer,
+                   bufferSize,
+                   0,
+                   (const struct sockaddr *)dstAddr,
+                   sizeof(*dstAddr));
+
+    if (n < 0)
+    {
+        perror("sendto");
+        return -1;
+    }
+
+    return n;
+}
+
+void UdpClose(stUdpConnection *ctx)
+{
+    if (ctx && ctx->sockfd > 0)
+    {
+        close(ctx->sockfd);
+        ctx->sockfd = -1;
+    }
+}
+
+
+
+#ifndef SIMU_STA_H
+#define SIMU_STA_H
+
+#include "udp_connection.h"
+#include "protocol.h"
+
+typedef struct
+{
+    stUdpConnection udp;
+    int running;
+} stSimuSta;
+
+int SimuStaInit(stSimuSta *simu,
+                const char *localIp,
+                uint16_t localPort,
+                const char *remoteIp,
+                uint16_t remotePort);
+
+void SimuStaRun(stSimuSta *simu);
+void SimuStaStop(stSimuSta *simu);
+
+#endif
+
+
+m
+#include "simu_sta.h"
+#include <stdio.h>
+#include <string.h>
+
+static void print_first_bytes(const uint8_t *buffer, uint32_t n)
+{
+    uint32_t max = n < 48 ? n : 48;
+    printf("HEX[0..%u] :", max);
+    for (uint32_t i = 0; i < max; ++i)
+    {
+        printf(" %02X", buffer[i]);
+    }
+    printf("\n");
+}
+
+static void fill_ack_test(const stFrameRaw *req, stAckTest *ack)
+{
+    memset(ack, 0, sizeof(*ack));
+
+    memcpy(ack->ident, IDENT_ACKT, 4);
+    ack->numMsg = req->numMsg;
+    ack->resultCode = 0;
+    ack->detailCode = 100;
+    ack->numSeq = 1;
+    ack->memSsd = 2048;
+
+    ack->checksum = calc_checksum_1020((const uint8_t *)ack, FRAME_DATA_SIZE);
+}
+
+static void fill_ack_seq(const stSeqFrame *req, stAckSeq *ack)
+{
+    memset(ack, 0, sizeof(*ack));
+
+    memcpy(ack->ident, IDENT_ACKS, 4);
+    ack->numMsg = (uint32_t)req->numeroSeq;
+    ack->numSeq = req->numeroSeq;   // très important : on reflète la séquence reçue
+    ack->memSsd = 4096;
+
+    ack->checksum = calc_checksum_1020((const uint8_t *)ack, FRAME_DATA_SIZE);
+}
+
+static void fill_ack_error(uint32_t msgNum, stAckTest *ack)
+{
+    memset(ack, 0, sizeof(*ack));
+
+    memcpy(ack->ident, IDENT_ERR, 4);
+    ack->numMsg = msgNum;
+    ack->resultCode = -1;
+    ack->detailCode = -1;
+    ack->numSeq = -1;
+    ack->memSsd = -1;
+
+    ack->checksum = calc_checksum_1020((const uint8_t *)ack, FRAME_DATA_SIZE);
+}
+
+int SimuStaInit(stSimuSta *simu,
+                const char *localIp,
+                uint16_t localPort,
+                const char *remoteIp,
+                uint16_t remotePort)
+{
+    if (!simu) return -1;
+
+    memset(simu, 0, sizeof(*simu));
+    simu->running = 1;
+
+    return UdpInit(&simu->udp, localIp, localPort, remoteIp, remotePort);
+}
+
+void SimuStaRun(stSimuSta *simu)
+{
+    if (!simu) return;
+
+    uint8_t recvBuffer[FRAME_SIZE];
+    struct sockaddr_in srcAddr;
+    uint32_t recvSize = 0;
+
+    printf("[SIMU] listening...\n");
+
+    while (simu->running)
+    {
+        memset(recvBuffer, 0, sizeof(recvBuffer));
+        recvSize = 0;
+
+        if (UdpRecv(&simu->udp, recvBuffer, sizeof(recvBuffer), &recvSize, &srcAddr) != 0)
+        {
+            continue;
+        }
+
+        printf("\n[SIMU] reçu %u octets\n", recvSize);
+        print_first_bytes(recvBuffer, recvSize);
+
+        if (recvSize != FRAME_SIZE)
+        {
+            printf("[SIMU] taille invalide\n");
+
+            stAckTest ackErr;
+            fill_ack_error(0, &ackErr);
+            UdpSendTo(&simu->udp, (const uint8_t *)&ackErr, sizeof(ackErr), &srcAddr);
+            continue;
+        }
+
+        if (!verify_frame_checksum(recvBuffer))
+        {
+            printf("[SIMU] checksum invalide\n");
+
+            stAckTest ackErr;
+            fill_ack_error(0, &ackErr);
+            UdpSendTo(&simu->udp, (const uint8_t *)&ackErr, sizeof(ackErr), &srcAddr);
+            continue;
+        }
+
+        const stFrameRaw *raw = (const stFrameRaw *)recvBuffer;
+
+        char ident[5] = {0};
+        memcpy(ident, raw->ident, 4);
+
+        printf("[SIMU] ident = %s\n", ident);
+        printf("[SIMU] numMsg = %u\n", raw->numMsg);
+
+        // Routage simple : TEST vs SEQ
+        // Ici :
+        // - si numMsg == 7 → TEST
+        // - sinon → SEQ
+        // Tu peux changer cette logique selon ton vrai protocole.
+        if (raw->numMsg == 7)
+        {
+            stAckTest ack;
+            fill_ack_test(raw, &ack);
+
+            printf("[SIMU] -> ACK TEST\n");
+            UdpSendTo(&simu->udp, (const uint8_t *)&ack, sizeof(ack), &srcAddr);
+        }
+        else
+        {
+            const stSeqFrame *seq = (const stSeqFrame *)recvBuffer;
+
+            printf("[SIMU] numeroSeq = %d\n", seq->numeroSeq);
+            printf("[SIMU] cap = %.4f | assiette = %.4f | bande = %.4f\n",
+                   seq->cap, seq->assiette, seq->bande);
+            printf("[SIMU] x = %.4f | y = %.4f | z = %.4f | vitesse = %.4f\n",
+                   seq->x, seq->y, seq->z, seq->vitesse);
+            printf("[SIMU] reemissionActive = %u | reemissionMs = %.4f\n",
+                   seq->reemissionActive, seq->reemissionMs);
+
+            stAckSeq ack;
+            fill_ack_seq(seq, &ack);
+
+            printf("[SIMU] -> ACK SEQ\n");
+            UdpSendTo(&simu->udp, (const uint8_t *)&ack, sizeof(ack), &srcAddr);
+        }
+    }
+}
+
+void SimuStaStop(stSimuSta *simu)
+{
+    if (!simu) return;
+    simu->running = 0;
+    UdpClose(&simu->udp);
+}
+
+
+m
+
+
+
+
+
+#include "simu_sta.h"
+#include <stdio.h>
+
+int main(void)
+{
+    stSimuSta simu;
+
+    // Le simulateur écoute sur 127.0.0.1:6001
+    // et répond à l’adresse source reçue.
+    if (SimuStaInit(&simu, "127.0.0.1", 6001, "127.0.0.1", 6000) != 0)
+    {
+        printf("[SIMU] init failed\n");
+        return 1;
+    }
+
+    printf("[SIMU] started on 127.0.0.1:6001\n");
+    SimuStaRun(&simu);
+
+    SimuStaStop(&simu);
+    return 0;
+}
+
+
+function parseAckFrame(view) {
+    const dv = new DataView(view.buffer);
+
+    const ident = decodeChars(view, 0, 4);
+    const numMsg = dv.getUint32(4, true);
+
+    // ACK TEST / ERR
+    if (ident === 'ACKT' || ident === 'ERR!') {
+        return {
+            type: 'TEST',
+            ident,
+            numMsg,
+            resultCode: dv.getInt32(8, true),
+            detailCode: dv.getInt32(12, true),
+            numSeq: dv.getInt32(16, true),
+            memSsd: dv.getInt32(20, true),
+            raw: view
+        };
+    }
+
+    // ACK SEQ
+    if (ident === 'ACKS') {
+        return {
+            type: 'SEQ',
+            ident,
+            numMsg,
+            numSeq: dv.getInt32(8, true),
+            memSsd: dv.getInt32(12, true),
+            raw: view
+        };
+    }
+
+    // inconnu
+    return {
+        type: 'UNKNOWN',
+        ident,
+        numMsg,
+        raw: view
+    };
+}
+
+
+function handleCommandSequenceResponse(parsed) {
+    if (typeof parsed === 'string') {
+        const ident = identificationInput ? identificationInput.value : '--';
+        const numSeq = numeroSequenceInput ? numeroSequenceInput.value : '0';
+
+        if (NumMsgSeqField) NumMsgSeqField.value = NumeroMsgInput ? NumeroMsgInput.value : '';
+        if (identResponseSeqField) identResponseSeqField.value = ident;
+        if (NumSeqbField) NumSeqbField.value = numSeq;
+        if (memssdSeqField) memssdSeqField.value = parsed;
+
+        if (NumMsgSeqInfo) NumMsgSeqInfo.textContent = 'Réponse CMD SEQ';
+        if (identResponseSeqInfo) identResponseSeqInfo.textContent = 'Ident utilisé';
+        if (NumSeqbInfo) NumSeqbInfo.textContent = 'Séquence';
+        if (memssdSeqInfo) memssdSeqInfo.textContent = 'Réponse texte';
+
+        if (SequenceSendStatus) {
+            SequenceSendStatus.textContent = 'Réponse Séquentielle reçue avec succès';
+            SequenceSendStatus.className = 'status-bar success';
+            SequenceSendStatus.classList.remove('hidden');
+        }
+
+        addLog('RECV', 'Réponse SEQ texte | ident=' + ident + ' | seq=' + numSeq);
+        return;
+    }
+
+    if (NumMsgSeqField) NumMsgSeqField.value = String(parsed.numMsg ?? '');
+    if (identResponseSeqField) identResponseSeqField.value = parsed.ident || '';
+    if (NumSeqbField) NumSeqbField.value = String(parsed.numSeq ?? '');
+    if (memssdSeqField) memssdSeqField.value = String(parsed.memSsd ?? '');
+
+    if (NumMsgSeqInfo) NumMsgSeqInfo.textContent = 'Numéro message ACK SEQ';
+    if (identResponseSeqInfo) identResponseSeqInfo.textContent = 'Identifiant ACK';
+    if (NumSeqbInfo) NumSeqbInfo.textContent = 'Séquence renvoyée';
+    if (memssdSeqInfo) memssdSeqInfo.textContent = 'Valeur mémoire SSD';
+
+    if (SequenceSendStatus) {
+        SequenceSendStatus.textContent =
+            'Réponse Séquentielle reçue avec succès (SEQ=' + parsed.numSeq + ')';
+        SequenceSendStatus.className = 'status-bar success';
+        SequenceSendStatus.classList.remove('hidden');
+    }
+
+    addLog(
+        'RECV',
+        'ACK SEQ | ident=' + parsed.ident +
+        ' | msg=' + parsed.numMsg +
+        ' | seq=' + parsed.numSeq +
+        ' | mem=' + parsed.memSsd
+    );
+}
+
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GS Tête Acoustique</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background:#f5f7fb; }
+    .row { display:flex; gap:20px; flex-wrap:wrap; }
+    .card { background:#fff; border:1px solid #d9e0ea; border-radius:12px; padding:16px; min-width:320px; flex:1; }
+    .card h2 { margin-top:0; }
+    .field { margin-bottom:10px; }
+    .field label { display:block; font-weight:bold; margin-bottom:4px; }
+    .field input, .field textarea, .field pre {
+      width:100%; box-sizing:border-box; padding:8px; border:1px solid #c8d2df; border-radius:8px;
+      background:#fff;
+    }
+    .field input[readonly], textarea[readonly] { background:#f1f4f8; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    button { padding:10px 14px; border:none; border-radius:8px; cursor:pointer; }
+    .primary { background:#2563eb; color:#fff; }
+    .danger { background:#dc2626; color:#fff; }
+    .status-bar { margin-top:12px; padding:10px; border-radius:8px; }
+    .success { background:#dcfce7; color:#166534; }
+    .warning { background:#fef3c7; color:#92400e; }
+    .error { background:#fee2e2; color:#991b1b; }
+    .hidden { display:none; }
+    .active { outline:2px solid #2563eb; }
+    pre { white-space:pre-wrap; min-height:60px; }
+    #logViewer { min-height:160px; }
+  </style>
+</head>
+<body>
+
+  <div class="row">
+    <div class="card">
+      <h2>Connexion</h2>
+
+      <div class="field">
+        <label for="ipAddress">Adresse IP</label>
+        <input id="ipAddress" value="127.0.0.1" />
+      </div>
+
+      <div class="field">
+        <label for="PortComm">Port</label>
+        <input id="PortComm" value="5500" />
+      </div>
+
+      <div class="actions">
+        <button id="connectBtn" class="primary">Connect</button>
+        <button id="disconnectBtn" class="danger">Disconnect</button>
+      </div>
+
+      <div id="connectionStatus">Déconnecté</div>
+      <div id="errorMessage" class="status-bar error hidden"></div>
+
+      <div style="margin-top:12px;">
+        <span id="globalConnectionChip">Déconnecté</span>
+      </div>
+
+      <!-- éléments optionnels utilisés par setWsState -->
+      <div id="wsLabel" style="display:none;"></div>
+      <div id="wsBadge" style="display:none;"></div>
+      <div id="navConnLabel" style="display:none;"></div>
+      <div id="connexion-info-ip" style="display:none;"></div>
+      <div id="connexion-info-port" style="display:none;"></div>
+      <div id="navConnStatus" style="display:none;"><span class="dot"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>Logs</h2>
+      <div class="actions">
+        <button id="copyLogsBtn">Copier</button>
+        <button id="clearLogsBtn">Effacer</button>
+        <button id="exportLogsBtn">Exporter</button>
+      </div>
+      <textarea id="logViewer" readonly></textarea>
+      <div id="logMeta">--:--:-- | -- octets | ----</div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:20px;">
+    <div class="card">
+      <h2>Commande TEST</h2>
+
+      <div class="field">
+        <label for="ident">Ident</label>
+        <input id="ident" maxlength="4" value="TEST" />
+        <small id="identLength">0/4 caractères</small>
+      </div>
+
+      <div class="field">
+        <label for="NumMsgTest">Numéro message</label>
+        <input id="NumMsgTest" value="7" />
+      </div>
+
+      <div class="actions">
+        <button id="testBtn" class="primary">Send CMD Test</button>
+      </div>
+
+      <div id="sendStatus" class="status-bar hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Réponse TEST</h2>
+
+      <div class="field">
+        <label for="NumMsg">NumMsg</label>
+        <input id="NumMsg" readonly />
+        <small id="NumMsgInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="identResponse">Ident réponse</label>
+        <input id="identResponse" readonly />
+        <small id="identResponseInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="resultat">Résultat</label>
+        <input id="resultat" readonly />
+        <small id="resultatInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="detail">Détail</label>
+        <input id="detail" readonly />
+        <small id="detailInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="NumSeq">NumSeq</label>
+        <input id="NumSeq" readonly />
+        <small id="NumSeqInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="memssd">MemSSD</label>
+        <input id="memssd" readonly />
+        <small id="memssdInfo"></small>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:20px;">
+    <div class="card">
+      <h2>Commande SÉQ</h2>
+
+      <div class="field">
+        <label for="identification">Ident</label>
+        <input id="identification" maxlength="4" value="SEQU" />
+        <small id="identificationLength">0/4 caractères</small>
+      </div>
+
+      <div class="field">
+        <label for="NumeroMsg">Numéro message UI</label>
+        <input id="NumeroMsg" value="100" />
+      </div>
+
+      <div class="field">
+        <label for="numeroSequence">Numéro séquence</label>
+        <input id="numeroSequence" value="1" />
+      </div>
+
+      <div class="field">
+        <label for="heure">Heure</label>
+        <input id="heure" readonly />
+      </div>
+
+      <div class="field">
+        <label for="Cap">Cap</label>
+        <input id="Cap" value="10.5" />
+      </div>
+
+      <div class="field">
+        <label for="Assiette">Assiette</label>
+        <input id="Assiette" value="2.5" />
+      </div>
+
+      <div class="field">
+        <label for="Bande">Bande</label>
+        <input id="Bande" value="1.5" />
+      </div>
+
+      <div class="field">
+        <label for="abscisse">X</label>
+        <input id="abscisse" value="100.0" />
+      </div>
+
+      <div class="field">
+        <label for="ordonnee">Y</label>
+        <input id="ordonnee" value="200.0" />
+      </div>
+
+      <div class="field">
+        <label for="z">Z</label>
+        <input id="z" value="50.0" />
+      </div>
+
+      <div class="field">
+        <label for="Vitesse">Vitesse</label>
+        <input id="Vitesse" value="12.4" />
+      </div>
+
+      <div class="field">
+        <label>Réémission</label>
+        <div class="actions">
+          <button type="button" id="reemissionOui" class="active">Oui</button>
+          <button type="button" id="reemissionNon">Non</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="Reemission">Réémission (legacy input)</label>
+        <input id="Reemission" value="50" />
+      </div>
+
+      <div class="field">
+        <label for="temps">Temps réémission (ms)</label>
+        <input id="temps" value="50" />
+      </div>
+
+      <div class="actions">
+        <button id="sendBtn" class="primary">Send CMD Seq</button>
+      </div>
+
+      <div id="SequenceSendStatus" class="status-bar hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Réponse SÉQ</h2>
+
+      <div class="field">
+        <label for="NumMsgSeq">NumMsg</label>
+        <input id="NumMsgSeq" readonly />
+        <small id="NumMsgSeqInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="identResponseSeq">Ident réponse</label>
+        <input id="identResponseSeq" readonly />
+        <small id="identResponseSeqInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="NumSeqb">Numéro séquence ACK</label>
+        <input id="NumSeqb" readonly />
+        <small id="NumSeqbInfo"></small>
+      </div>
+
+      <div class="field">
+        <label for="memssdSeq">MemSSD</label>
+        <input id="memssdSeq" readonly />
+        <small id="memssdSeqInfo"></small>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:20px;">
+    <div class="card">
+      <h2>Détail trame TEST</h2>
+      <div id="trameTestDetail" style="display:block;">
+        <div id="trameTestSize"></div>
+        <div id="trameTestChecksum"></div>
+        <div><strong>Ident:</strong> <span id="ti_ident">—</span></div>
+        <div><strong>NumMsg:</strong> <span id="ti_numMsg">—</span></div>
+        <div><strong>Timestamp:</strong> <span id="ti_timestamp">—</span></div>
+        <div><strong>Checksum:</strong> <span id="ti_checksum">—</span></div>
+        <pre id="ti_hex32">—</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Détail trame SÉQ</h2>
+      <div id="trameSeqDetail" style="display:block;">
+        <div id="trameSeqSize"></div>
+        <div id="trameSeqChecksum"></div>
+        <div><strong>Ident:</strong> <span id="ts_ident">—</span></div>
+        <div><strong>Seq:</strong> <span id="ts_seq">—</span></div>
+        <div><strong>Heure:</strong> <span id="ts_heure">—</span></div>
+        <div><strong>Cap:</strong> <span id="ts_cap">—</span></div>
+        <div><strong>Assiette:</strong> <span id="ts_assiette">—</span></div>
+        <div><strong>Bande:</strong> <span id="ts_bande">—</span></div>
+        <div><strong>X:</strong> <span id="ts_x">—</span></div>
+        <div><strong>Y:</strong> <span id="ts_y">—</span></div>
+        <div><strong>Z:</strong> <span id="ts_z">—</span></div>
+        <div><strong>Vitesse:</strong> <span id="ts_vitesse">—</span></div>
+        <div><strong>Réémission:</strong> <span id="ts_reem_active">—</span></div>
+        <div><strong>Réémission ms:</strong> <span id="ts_reem_ms">—</span></div>
+        <div><strong>Checksum:</strong> <span id="ts_checksum">—</span></div>
+        <pre id="ts_hex48">—</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- zones miroirs optionnelles utilisées par ton JS -->
+  <textarea id="logViewer_t" style="display:none;"></textarea>
+  <textarea id="logViewer2" style="display:none;"></textarea>
+  <div id="logMeta_t" style="display:none;"></div>
+  <div id="logMeta2" style="display:none;"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+m
+
+
+* {
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #f4f7fb;
+    --card: #ffffff;
+    --border: #d7dfeb;
+    --text: #1f2937;
+    --muted: #6b7280;
+
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+
+    --success-bg: #dcfce7;
+    --success-text: #166534;
+
+    --warning-bg: #fef3c7;
+    --warning-text: #92400e;
+
+    --error-bg: #fee2e2;
+    --error-text: #991b1b;
+
+    --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --radius: 14px;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    padding: 20px;
+}
+
+h2 {
+    margin-top: 0;
+    margin-bottom: 14px;
+    font-size: 20px;
+    color: #0f172a;
+}
+
+.row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    min-width: 320px;
+    flex: 1;
+    box-shadow: var(--shadow);
+}
+
+.field {
+    margin-bottom: 12px;
+}
+
+.field label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+.field input,
+.field textarea,
+.field pre {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #fff;
+    color: var(--text);
+    font-size: 14px;
+}
+
+.field input[readonly],
+.field textarea[readonly] {
+    background: #f8fafc;
+    color: #475569;
+}
+
+.field small {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 70px;
+    background: #0f172a;
+    color: #dbeafe;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 13px;
+    overflow-x: auto;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+button {
+    padding: 10px 14px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    transition: background 0.2s ease, transform 0.06s ease, opacity 0.2s ease;
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.primary {
+    background: var(--primary);
+    color: #fff;
+}
+
+.primary:hover {
+    background: var(--primary-hover);
+}
+
+.danger {
+    background: var(--danger);
+    color: #fff;
+}
+
+.danger:hover {
+    background: var(--danger-hover);
+}
+
+.status-bar {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+
+.success {
+    background: var(--success-bg);
+    color: var(--success-text);
+}
+
+.warning {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+}
+
+.error {
+    background: var(--error-bg);
+    color: var(--error-text);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.active {
+    outline: 2px solid var(--primary);
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+#globalConnectionChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+    background: #e5e7eb;
+    color: #374151;
+}
+
+#connectionStatus {
+    margin-top: 12px;
+    font-weight: 700;
+}
+
+#logViewer {
+    min-height: 180px;
+    font-family: Consolas, Monaco, monospace;
+    background: #0b1220;
+    color: #dbeafe;
+}
+
+#logMeta {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* blocs détail */
+#trameTestDetail div,
+#trameSeqDetail div {
+    margin-bottom: 8px;
+}
+
+#trameTestDetail strong,
+#trameSeqDetail strong {
+    color: #0f172a;
+}
+
+/* inputs réponse */
+#NumMsg,
+#identResponse,
+#resultat,
+#detail,
+#NumSeq,
+#memssd,
+#NumMsgSeq,
+#identResponseSeq,
+#NumSeqb,
+#memssdSeq {
+    font-weight: 600;
+}
+
+/* responsive */
+@media (max-width: 900px) {
+    body {
+        padding: 12px;
+    }
+
+    .row {
+        flex-direction: column;
+    }
+
+    .card {
+        min-width: auto;
+        width: 100%;
+    }
+}
+
+
+
+
+
